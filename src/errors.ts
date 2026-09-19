@@ -14,6 +14,13 @@ export class AuthExpiredError extends Error {}
  */
 export class CloudflareBlockedError extends Error {}
 
+/**
+ * The site could not be reached at all -- DNS, firewall, proxy or a wrong
+ * WM_BASE_URL. Distinct from a login failure: nothing about our credentials or
+ * fingerprint was rejected, so it must not consume the login backoff budget.
+ */
+export class SiteUnreachableError extends Error {}
+
 /** Login could not complete. `reason` names which wall we hit. */
 export class LoginFailedError extends Error {
   constructor(

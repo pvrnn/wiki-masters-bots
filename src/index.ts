@@ -6,6 +6,7 @@ import {
   LoginFailedError,
   LoginSuppressedError,
   PackRunAbortedError,
+  SiteUnreachableError,
 } from './errors.js';
 import { configureLogger, log } from './logger.js';
 import { notify } from './notify.js';
@@ -162,6 +163,15 @@ async function main(): Promise<number> {
       log.error(`Cloudflare blocked the run: ${error.message}`);
       await notify(cfg, `wiki-masters bot: blocked by Cloudflare — ${error.message}`);
       return EXIT.auth;
+    }
+    if (error instanceof SiteUnreachableError) {
+      log.error(error.message);
+      log.error(
+        'The site is not reachable from this machine. Check network access, DNS, any ' +
+          'proxy or firewall, and that WM_BASE_URL is correct. Credentials were not ' +
+          'rejected, so the login backoff is untouched.',
+      );
+      return EXIT.api;
     }
     if (error instanceof PackRunAbortedError) {
       log.error(`run aborted: ${error.message}`);
