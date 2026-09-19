@@ -1,0 +1,26 @@
+{
+  "name": "wiki-masters-bots",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bot that logs in to wiki-masters.com and drains the pack queue on a recurring schedule.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.9"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "start": "node --env-file-if-exists=.env dist/index.js daemon",
+    "run:once": "node --env-file-if-exists=.env dist/index.js run",
+    "login": "node --env-file-if-exists=.env dist/index.js login",
+    "probe": "node --env-file-if-exists=.env dist/index.js probe",
+    "dev": "npm run build && node --env-file-if-exists=.env dist/index.js run"
+  },
+  "dependencies": {
+    "playwright": "1.56.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^6.0.2"
+  }
+}

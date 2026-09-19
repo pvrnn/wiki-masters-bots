@@ -1,0 +1,16 @@
+services:
+  bot:
+    build: .
+    image: wiki-masters-bot
+    env_file: .env
+    # Session, browser profile, lock, backoff ledger and debug dumps live here.
+    # Without this volume every restart costs a fresh login -- which on a
+    # datacenter IP means another roll of the Turnstile dice.
+    #
+    # The container runs as uid 1000 (pwuser), so ./data must be writable by it:
+    #   mkdir -p data && sudo chown -R 1000:1000 data
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
