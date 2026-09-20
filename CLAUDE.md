@@ -17,7 +17,7 @@ import directly from `dist/`.
 npm run build       # tsc -> dist/. Run this after any src/ change before testing the CLI
 npm run typecheck   # tsc --noEmit
 npm run run:once    # one pack-opening pass, then exit
-npm start           # daemon mode: run now, then every WM_INTERVAL_MINUTES (61)
+npm start           # daemon mode: run now, then every WM_INTERVAL_MINUTES (30)
 npm run login       # password + Turnstile browser login (rarely used — see below)
 npm run probe       # verify the saved session without opening any packs
 npm run import-cookie -- --file cookie.txt   # the normal way to establish a session

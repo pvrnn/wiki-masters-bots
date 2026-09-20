@@ -108,7 +108,7 @@ export function loadConfig(): Config {
     );
   }
 
-  const intervalMinutes = num('WM_INTERVAL_MINUTES', 61, 1, 10_080);
+  const intervalMinutes = num('WM_INTERVAL_MINUTES', 30, 1, 10_080);
   const runBudgetMs = num('WM_RUN_BUDGET_MS', 2_700_000, 10_000, 86_400_000);
   if (runBudgetMs >= intervalMinutes * 60_000) {
     throw new ConfigError(

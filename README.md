@@ -69,10 +69,12 @@ stop you from earning one. Running this may get the account struck or blocked.
 Exit codes: `0` success, no-op, skipped or in backoff · `1` configuration ·
 `2` auth, session or verification problem · `3` API failure or stopped mid-drain.
 
-### Why 61 minutes, not 60
+### Why every 30 minutes
 
-Packs refill on a rolling hour, so a 60-minute schedule races it. 61 always lands past the
-boundary. Cron cannot express 61 minutes, so the daemon schedules itself, anchoring each
+Packs refill on a rolling hour, so a new pack is never more than an hour old. Running every
+30 minutes picks one up within half an hour of it appearing; a run that finds nothing is a
+cheap no-op. (It used to be 61 minutes, to land just past each hourly boundary.) Cron cannot
+express an interval anchored to the run start, so the daemon schedules itself, anchoring each
 wait to when the run *started* so the period does not drift.
 
 ## Deploying
@@ -96,7 +98,7 @@ every one. The ones that matter:
 |---|---|---|
 | `WM_COOKIE` | unset | Session cookie; imported on first boot |
 | `WM_EMAIL` / `WM_PASSWORD` | unset | Only for `login` mode |
-| `WM_INTERVAL_MINUTES` | `61` | Daemon period |
+| `WM_INTERVAL_MINUTES` | `30` | Daemon period |
 | `WM_OPEN_DELAY_MIN_MS` / `_MAX_MS` | `5000` / `10000` | Random gap between opens |
 | `WM_REQUEST_TIMEOUT_MS` | `180000` | Per request |
 | `WM_MAX_PACKS` | `200` | Iteration cap |

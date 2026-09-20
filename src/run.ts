@@ -95,8 +95,8 @@ export async function runOnce(cfg: Config, signal?: AbortSignal): Promise<RunOut
       });
     }
 
-    // Supabase access tokens last 60 min and we run every 61, so this refresh is
-    // the normal path rather than an exception.
+    // Supabase access tokens last 60 min; ensureFreshSession refreshes only when
+    // the saved one is (nearly) expired.
     const session = await ensureFreshSession(cfg);
 
     let knownRemaining: number | undefined;

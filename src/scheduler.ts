@@ -18,7 +18,7 @@ const MIN_GAP_MS = 60_000;
  * repeat. The wait is anchored to when the run *started*, so the cadence is a
  * true interval rather than "interval plus however long the run took".
  *
- * Plain cron cannot express 61 minutes, which is why this exists.
+ * Plain cron cannot anchor to the run start, which is why this exists.
  */
 export async function runDaemon(cfg: Config): Promise<void> {
   const controller = new AbortController();

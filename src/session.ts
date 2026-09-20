@@ -512,9 +512,9 @@ function persistSessionCookies(cfg: Config, fresh: Cookie[]): void {
 /**
  * Guarantees a usable access token.
  *
- * The site issues 60-minute tokens and the bot runs every 61, so on a normal
- * schedule the saved token is ALWAYS expired -- refreshing is the common path,
- * not the exception. The rotated refresh token is written back immediately;
+ * The site issues 60-minute tokens and the bot runs every 30, so the saved token
+ * is often still valid but sometimes expired -- refreshing is a routine path,
+ * not an exception. The rotated refresh token is written back immediately;
  * losing it would break the chain permanently.
  */
 export async function ensureFreshSession(cfg: Config): Promise<SupabaseSession | undefined> {
