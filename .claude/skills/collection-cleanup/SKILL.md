@@ -29,13 +29,35 @@ or `npm run login` first if none exists. The build has to be current:
 
 ## Steps
 
-1. **Fetch the full collection** (read-only, paginates until a short page):
+1. **Fetch the collection** (read-only):
    ```
-   node .claude/skills/collection-cleanup/scripts/fetch-collection.mjs
+   node .claude/skills/collection-cleanup/scripts/fetch-collection.mjs [--full]
    ```
-   Writes `data/collection-raw.json` (every card) and
-   `data/collection-categories.json` (distinct category strings + counts, most
-   common first) — the second file is what step 2 is tuned against.
+   Two modes, chosen automatically:
+   - **Incremental** (the default once `data/collection-sync-state.json` exists
+     from a prior run): paginates `?sort=added` — newest first — and stops as
+     soon as it reaches cards already on disk, instead of walking all 13+
+     pages every time. A no-op refresh takes ~12s instead of ~90s; ~10 new
+     cards from two packs took ~16s. Verified against a real pack-open: the
+     exact 10 new cards showed up, nothing else changed, total matched
+     precisely (631 → 641).
+   - **Full** (`--full`, or automatically when there's no prior state to sync
+     against): the original behaviour, `?sort=rarity`, every page until a
+     short one ends it. Run this if the numbers ever look wrong, or after a
+     discard made outside this UI's own flow — incremental mode only detects
+     *additions*, never removals it didn't cause itself (see "Keeping raw and
+     grouped in sync" below).
+
+   Either way, writes `data/collection-raw.json` (every card),
+   `data/collection-sync-state.json` (`lastRefreshAt`, and the real watermark
+   `lastSeenObtainedAt` — the newest `obtained_at` on disk, which is what
+   incremental mode's stop condition actually uses), and
+   `data/collection-categories.json` (distinct category strings + counts,
+   most common first) — the last one is what step 2 is tuned against.
+
+   The listing endpoint has shown sporadic transient 500s in practice (a
+   different page failing each retry, not one bad page) — each page gets up
+   to 3 retries with backoff before the whole fetch gives up.
 
 2. **Classify into themes and group**:
    ```
@@ -77,11 +99,13 @@ or `npm run login` first if none exists. The build has to be current:
    - reads `data/collection-grouped.json` (never touches the live site itself);
    - lets the user browse by rarity → theme, search, and multi-select cards;
    - on "Discard", shows the exact count and requires typing it to confirm,
-     then POSTs `{ card_ids: [...] }` to this server's `/api/discard`, which
+     then POSTs `{ row_ids: [...] }` to this server's `/api/discard`, which
      is the only thing in this whole skill that calls the real endpoint.
 
-   Recommend the user test with **one** low-value card first before a large
-   batch — see "Open question" below for why.
+   `/api/discard`'s response distinguishes real per-card outcomes
+   (`discardedCount`, `succeededIds`, `failed: [{id, error}]`) rather than
+   treating any 200 as success — see "The id field" below for why that
+   distinction is load-bearing, not defensive-programming paranoia.
 
 ## Files
 
@@ -99,22 +123,50 @@ All scripts resolve the repo's `dist/` via `import.meta.url`, so they work
 regardless of the caller's cwd, but are meant to be run from the repo root (as
 shown above) so relative paths in their own error messages stay meaningful.
 
-`data/collection-raw.json`, `data/collection-categories.json`,
-`data/collection-grouped.json`, and `data/discard-audit.log` (one JSON line
-per discard call: requested ids, outcome, response) all land under `data/`,
-which is already gitignored — this is personal collection data, never commit
-it.
+`data/collection-raw.json`, `data/collection-sync-state.json`,
+`data/collection-categories.json`, `data/collection-grouped.json`, and
+`data/discard-audit.log` (one JSON line per discard call: requested ids,
+outcome, response) all land under `data/`, which is already gitignored —
+this is personal collection data, never commit it.
 
-## Open question: which id field does bulk-discard want?
+## Keeping raw and grouped in sync with real discards
+
+A successful discard prunes the discarded ids from **both**
+`collection-raw.json` and `collection-grouped.json` (see `pruneFromRawFile`
+and `pruneFromGroupedFile` in `serve-review.mjs`). Pruning raw.json matters
+specifically *because* incremental fetch merges new cards on top of whatever
+is already there rather than replacing it — a discarded card left behind in
+raw.json would persist forever and reappear the next time `build-grouped.mjs`
+regenerates the grouped view from it, silently undoing the prune on the next
+refresh. Both files have to agree with reality, not just the one currently
+being read.
+
+If a discard ever happens through some path other than this UI (manual API
+call, a bug, whatever), incremental fetch has no way to know and won't catch
+up — it only detects additions. Run `--full` to reconcile.
+
+## The id field: resolved by a live test, and the API lies about it
 
 Each collection row carries both `id` (this specific owned copy) and
-`card_id` (the underlying card). `serve-review.mjs` sends `card_id`, inferred
-from naming symmetry with the request field `card_ids` — not confirmed
-against a real call, and the account this was built against had zero
-duplicate cards, so the two id spaces couldn't be distinguished empirically.
-If a live test discards the wrong-seeming thing (or the call errors), the fix
-is a one-line change in `serve-review.mjs`: swap `card.card_id` for
-`card.row_id` in the `handleDiscard` function's call to `postJson`.
+`card_id` (the underlying card, shared across every owner). Naming symmetry
+with the request field `card_ids` suggested the latter — that guess was
+**wrong**. A live call sending `card_id` values returned **HTTP 200** with
+`{ discarded_count: 0, failed: [...one entry per id, every one "card_not_owned"...] }`.
+Nothing was actually discarded, and nothing in the HTTP status said so.
+
+`serve-review.mjs` now sends `id` (the row id) under the site's own
+`card_ids` request key — the key name is the site's contract; it does not
+describe what it semantically holds. Confirmed against a real single-card
+discard (see `data/discard-audit.log`, and independently re-fetched the live
+collection afterward to confirm the card was actually gone, not just that the
+response claimed so).
+
+**The lesson that matters beyond this one field**: this endpoint returns 200
+for a call that discarded nothing. Any code calling it — this UI included —
+has to read `discarded_count`/`failed` from the body, never treat HTTP status
+as the success signal. `parseDiscardResult` in `serve-review.mjs` is where
+that happens; `pruneFromGroupedFile` is only ever called with confirmed
+`succeededIds`, never the raw request list, for exactly this reason.
 
 ## Rarity order
 

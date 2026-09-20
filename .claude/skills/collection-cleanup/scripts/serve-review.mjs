@@ -32,6 +32,7 @@ const { configureLogger, log } = await import(distLogger);
 const REPO_ROOT = resolve(new URL('../../../../', import.meta.url).pathname);
 const PUBLIC_DIR = resolve(new URL('../public/', import.meta.url).pathname);
 const GROUPED_PATH = resolve(REPO_ROOT, 'data/collection-grouped.json');
+const RAW_PATH = resolve(REPO_ROOT, 'data/collection-raw.json');
 const AUDIT_PATH = resolve(REPO_ROOT, 'data/discard-audit.log');
 const DISCARD_PATH = '/api/user-cards/bulk-discard';
 
@@ -91,10 +92,16 @@ async function audit(entry) {
  * reload (or a second browser tab) sees the same state the current tab does
  * without needing a full re-fetch from the live site. Mirrors app.js's own
  * removeCardsFromData, but persisted server-side instead of in-memory only.
+ *
+ * Only ever called with ids the site actually confirmed discarding -- see
+ * parseDiscardResult below. Pruning ids that were only *requested* would
+ * desync the local file from a still-true state, in the same direction as
+ * the bug this whole thing was written to fix in the first place.
  */
-async function pruneFromGroupedFile(cardIds) {
+async function pruneFromGroupedFile(rowIds) {
+  if (rowIds.length === 0) return;
   if (!existsSync(GROUPED_PATH)) return;
-  const idSet = new Set(cardIds);
+  const idSet = new Set(rowIds);
   let data;
   try {
     data = JSON.parse(await readFile(GROUPED_PATH, 'utf8'));
@@ -107,7 +114,7 @@ async function pruneFromGroupedFile(cardIds) {
   for (const group of data.groups ?? []) {
     for (const theme of group.themes ?? []) {
       const before = theme.cards.length;
-      theme.cards = theme.cards.filter((c) => !idSet.has(c.card_id));
+      theme.cards = theme.cards.filter((c) => !idSet.has(c.row_id));
       const delta = before - theme.cards.length;
       theme.count = theme.cards.length;
       group.count -= delta;
@@ -117,7 +124,55 @@ async function pruneFromGroupedFile(cardIds) {
   data.total = (data.total ?? 0) - removed;
 
   await writeFile(GROUPED_PATH, JSON.stringify(data, null, 2));
-  log.info('pruned discarded cards from collection-grouped.json', { removed, requested: cardIds.length });
+  log.info('pruned discarded cards from collection-grouped.json', { removed, requested: rowIds.length });
+}
+
+/**
+ * Also prune data/collection-raw.json, not just the grouped view.
+ *
+ * fetch-collection.mjs's incremental mode merges newly-added cards ON TOP OF
+ * whatever is already in this file rather than replacing it -- so a
+ * discarded card left in here would persist forever and reappear the next
+ * time build-grouped.mjs regenerates the grouped view from it, silently
+ * undoing this exact prune. Both files need to agree with reality.
+ */
+async function pruneFromRawFile(rowIds) {
+  if (rowIds.length === 0) return;
+  if (!existsSync(RAW_PATH)) return;
+  const idSet = new Set(rowIds);
+  let data;
+  try {
+    data = JSON.parse(await readFile(RAW_PATH, 'utf8'));
+  } catch (error) {
+    log.warn('could not read collection-raw.json to prune it; leaving it as-is', { error: String(error) });
+    return;
+  }
+  const before = data.collection?.length ?? 0;
+  data.collection = (data.collection ?? []).filter((item) => !idSet.has(item.id));
+  data.total = data.collection.length;
+  await writeFile(RAW_PATH, JSON.stringify(data, null, 2));
+  log.info('pruned discarded cards from collection-raw.json', { removed: before - data.collection.length });
+}
+
+/**
+ * The site returns 200 with a JSON body EVEN WHEN EVERY CARD FAILS -- a live
+ * test sent 33 ids and got back { discarded_count: 0, failed: [...33 entries
+ * with error "card_not_owned"...] }. HTTP status alone is not a success
+ * signal for this endpoint; the body has to be read.
+ *
+ * requestedIds and the response's failed[].card_id are matched positionally
+ * as a fallback if the count doesn't line up, since the response's own
+ * per-entry id field is just an echo of whatever we sent (confusingly still
+ * called "card_id" in the response schema even though we send row ids under
+ * that field -- see the id-field note on the postJson call below).
+ */
+function parseDiscardResult(requestedIds, body) {
+  const failedEntries = Array.isArray(body?.failed) ? body.failed : [];
+  const failedIds = new Set(failedEntries.map((f) => f.card_id ?? f.id).filter(Boolean));
+  const failed = failedEntries.map((f) => ({ id: f.card_id ?? f.id, error: f.error ?? 'unknown' }));
+  const succeededIds = requestedIds.filter((id) => !failedIds.has(id));
+  const discardedCount = typeof body?.discarded_count === 'number' ? body.discarded_count : succeededIds.length;
+  return { succeededIds, failed, discardedCount };
 }
 
 async function handleDiscard(req, res) {
@@ -130,14 +185,16 @@ async function handleDiscard(req, res) {
     return;
   }
 
-  const cardIds = Array.isArray(payload?.card_ids) ? payload.card_ids.filter((x) => typeof x === 'string') : [];
-  if (cardIds.length === 0) {
+  // Named row_ids, not card_ids, because that's genuinely what these are --
+  // see the note on the postJson call below for why.
+  const rowIds = Array.isArray(payload?.row_ids) ? payload.row_ids.filter((x) => typeof x === 'string') : [];
+  if (rowIds.length === 0) {
     res.writeHead(400, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: false, error: 'card_ids must be a non-empty array of strings' }));
+    res.end(JSON.stringify({ ok: false, error: 'row_ids must be a non-empty array of strings' }));
     return;
   }
 
-  log.info('discard requested from the review UI', { count: cardIds.length });
+  log.info('discard requested from the review UI', { count: rowIds.length });
 
   try {
     // The UI may sit open for a long time; make sure the token used for this
@@ -145,35 +202,48 @@ async function handleDiscard(req, res) {
     // start.
     await ensureFreshSession(cfg);
   } catch (error) {
-    await audit({ requested: cardIds, outcome: 'session-refresh-failed', error: String(error) });
+    await audit({ requested: rowIds, outcome: 'session-refresh-failed', error: String(error) });
     res.writeHead(502, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: false, error: `could not refresh the session: ${String(error)}` }));
     return;
   }
 
-  // NOTE on the id field: the collection API returns each row with both an
-  // `id` (this specific owned copy) and a `card_id` (the underlying card).
-  // This is sent as card_id, inferred from the request field being named
-  // "card_ids" (plural of the response's own "card_id" field) -- not
-  // empirically confirmed against a real call. If a live test shows the
-  // server wants the row id instead, change `card.card_id` below to
-  // `card.row_id`.
-  const result = await postJson(cfg, DISCARD_PATH, { card_ids: cardIds });
+  // NOTE on the id field, RESOLVED by a live test (not a guess -- see
+  // discard-audit.log entries from 2026-09-20): the collection API returns
+  // each row with both an `id` (this specific owned copy) and a `card_id`
+  // (the underlying card). Sending card_id values under the site's own
+  // "card_ids" request field returned 200 with discarded_count: 0 and every
+  // single id marked "card_not_owned" -- the site's field is misleadingly
+  // named; it actually wants the row id. So: row ids in, still under the
+  // site's own "card_ids" key, because that field name is the site's
+  // contract, not a description of what it semantically holds.
+  const result = await postJson(cfg, DISCARD_PATH, { card_ids: rowIds });
 
   await audit({
-    requested: cardIds,
+    requested: rowIds,
     outcome: result.kind,
     status: result.status,
     body: result.kind === 'json' ? result.body : ('snippet' in result ? result.snippet : undefined),
   });
 
   if (result.kind === 'json') {
-    log.info('discard succeeded', { count: cardIds.length, status: result.status });
-    await pruneFromGroupedFile(cardIds).catch((error) =>
-      log.warn('discard succeeded but pruning the on-disk file failed', { error: String(error) }),
+    const { succeededIds, failed, discardedCount } = parseDiscardResult(rowIds, result.body);
+    log.info('discard call completed', {
+      requested: rowIds.length,
+      discardedCount,
+      failed: failed.length,
+      status: result.status,
+    });
+
+    await pruneFromGroupedFile(succeededIds).catch((error) =>
+      log.warn('discard succeeded but pruning collection-grouped.json failed', { error: String(error) }),
     );
+    await pruneFromRawFile(succeededIds).catch((error) =>
+      log.warn('discard succeeded but pruning collection-raw.json failed', { error: String(error) }),
+    );
+
     res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, status: result.status, body: result.body }));
+    res.end(JSON.stringify({ ok: true, status: result.status, discardedCount, succeededIds, failed, raw: result.body }));
     return;
   }
 

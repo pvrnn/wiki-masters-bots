@@ -9,7 +9,12 @@ const RARITY_LABEL = { L: 'Légendaire', UR: 'Ultra Rare', SR: 'Super Rare', R: 
 
 const state = {
   data: null,
-  // card_id -> card object, for every card currently rendered (post-discard removals prune this).
+  // row_id -> card object, for every card currently rendered (post-discard removals prune this).
+  //
+  // Keyed by row_id, NOT card_id: a live test proved bulk-discard wants the
+  // collection row's own id. Sending card_id gave discarded_count: 0 and
+  // "card_not_owned" for every single card, despite a 200 response -- see
+  // SKILL.md's "id field" section for the evidence.
   byId: new Map(),
   selected: new Set(),
   query: '',
@@ -42,7 +47,7 @@ async function loadCollection() {
   state.byId.clear();
   for (const g of state.data.groups) {
     for (const t of g.themes) {
-      for (const c of t.cards) state.byId.set(c.card_id, c);
+      for (const c of t.cards) state.byId.set(c.row_id, c);
     }
   }
   render();
@@ -127,8 +132,8 @@ function render() {
 function renderCard(card) {
   const el = document.createElement('div');
   el.className = 'card';
-  el.dataset.cardId = card.card_id;
-  if (state.selected.has(card.card_id)) el.classList.add('selected');
+  el.dataset.rowId = card.row_id;
+  if (state.selected.has(card.row_id)) el.classList.add('selected');
 
   const img = card.image_url
     ? `<img src="${card.image_url}" loading="lazy" alt="" />`
@@ -146,7 +151,7 @@ function renderCard(card) {
       </div>
     </div>
   `;
-  el.addEventListener('click', () => toggleCard(card.card_id, el));
+  el.addEventListener('click', () => toggleCard(card.row_id, el));
   return el;
 }
 
@@ -169,7 +174,7 @@ function toggleCard(cardId, el) {
 }
 
 function toggleThemeSelection(theme) {
-  const ids = theme.cards.map((c) => c.card_id);
+  const ids = theme.cards.map((c) => c.row_id);
   const allSelected = ids.every((id) => state.selected.has(id));
   for (const id of ids) {
     if (allSelected) state.selected.delete(id);
@@ -188,7 +193,7 @@ function updateSelectionBar() {
 function applyFilter() {
   state.query = normalize($search.value.trim());
   for (const el of document.querySelectorAll('.card')) {
-    const card = state.byId.get(el.dataset.cardId);
+    const card = state.byId.get(el.dataset.rowId);
     el.classList.toggle('hidden', card ? !cardMatchesQuery(card) : true);
   }
   // Hide theme blocks / rarity groups that end up empty after filtering, so a
@@ -262,22 +267,39 @@ function openConfirmModal() {
       const res = await fetch('/api/discard', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ card_ids: ids }),
+        body: JSON.stringify({ row_ids: ids }),
       });
       const result = await res.json();
-      if (res.ok && result.ok) {
-        localStorage.setItem('wm-discard-confirmed-once', '1');
-        for (const id of ids) {
-          state.selected.delete(id);
-          state.byId.delete(id);
-        }
-        removeCardsFromData(ids);
-        backdrop.remove();
-        render();
-        showToast(`${cards.length} carte(s) défaussée(s).`, 'ok');
-      } else {
+
+      if (!res.ok || !result.ok) {
         backdrop.remove();
         showToast(`Échec (${res.status}): ${result.error ?? JSON.stringify(result)}`, 'error');
+        return;
+      }
+
+      // A 200 from the site does not mean every card was actually discarded
+      // -- it can return discarded_count: 0 with every id individually
+      // marked "card_not_owned". Only remove what the site confirms.
+      const succeeded = result.succeededIds ?? [];
+      const failed = result.failed ?? [];
+
+      for (const id of succeeded) {
+        state.selected.delete(id);
+        state.byId.delete(id);
+      }
+      removeCardsFromData(succeeded);
+      backdrop.remove();
+      render();
+
+      if (succeeded.length > 0) {
+        localStorage.setItem('wm-discard-confirmed-once', '1');
+        showToast(`${succeeded.length} carte(s) défaussée(s).`, 'ok');
+      }
+      if (failed.length > 0) {
+        const reasons = [...new Set(failed.map((f) => f.error))].join(', ');
+        showToast(`${failed.length} carte(s) refusée(s) par le site (${reasons}). Toujours sélectionnée(s).`, 'error');
+        // Leave the failed ones selected so the user can retry or inspect
+        // them, rather than silently losing the selection.
       }
     } catch (err) {
       backdrop.remove();
@@ -287,11 +309,12 @@ function openConfirmModal() {
 }
 
 function removeCardsFromData(ids) {
+  if (ids.length === 0) return;
   const idSet = new Set(ids);
   for (const g of state.data.groups) {
     for (const t of g.themes) {
       const before = t.cards.length;
-      t.cards = t.cards.filter((c) => !idSet.has(c.card_id));
+      t.cards = t.cards.filter((c) => !idSet.has(c.row_id));
       t.count = t.cards.length;
       g.count -= before - t.cards.length;
     }
