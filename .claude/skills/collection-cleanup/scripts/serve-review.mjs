@@ -17,7 +17,7 @@
 //   node .claude/skills/collection-cleanup/scripts/serve-review.mjs [port]
 
 import { createServer } from 'node:http';
-import { readFile, appendFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, appendFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { extname, join, resolve } from 'node:path';
 
@@ -86,6 +86,40 @@ async function audit(entry) {
   await appendFile(AUDIT_PATH, `${JSON.stringify({ at: new Date().toISOString(), ...entry })}\n`);
 }
 
+/**
+ * Removes the just-discarded cards from the on-disk grouped JSON, so a page
+ * reload (or a second browser tab) sees the same state the current tab does
+ * without needing a full re-fetch from the live site. Mirrors app.js's own
+ * removeCardsFromData, but persisted server-side instead of in-memory only.
+ */
+async function pruneFromGroupedFile(cardIds) {
+  if (!existsSync(GROUPED_PATH)) return;
+  const idSet = new Set(cardIds);
+  let data;
+  try {
+    data = JSON.parse(await readFile(GROUPED_PATH, 'utf8'));
+  } catch (error) {
+    log.warn('could not read collection-grouped.json to prune it; leaving it as-is', { error: String(error) });
+    return;
+  }
+
+  let removed = 0;
+  for (const group of data.groups ?? []) {
+    for (const theme of group.themes ?? []) {
+      const before = theme.cards.length;
+      theme.cards = theme.cards.filter((c) => !idSet.has(c.card_id));
+      const delta = before - theme.cards.length;
+      theme.count = theme.cards.length;
+      group.count -= delta;
+      removed += delta;
+    }
+  }
+  data.total = (data.total ?? 0) - removed;
+
+  await writeFile(GROUPED_PATH, JSON.stringify(data, null, 2));
+  log.info('pruned discarded cards from collection-grouped.json', { removed, requested: cardIds.length });
+}
+
 async function handleDiscard(req, res) {
   let payload;
   try {
@@ -135,6 +169,9 @@ async function handleDiscard(req, res) {
 
   if (result.kind === 'json') {
     log.info('discard succeeded', { count: cardIds.length, status: result.status });
+    await pruneFromGroupedFile(cardIds).catch((error) =>
+      log.warn('discard succeeded but pruning the on-disk file failed', { error: String(error) }),
+    );
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, status: result.status, body: result.body }));
     return;
