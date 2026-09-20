@@ -2,7 +2,7 @@ import { request } from 'playwright';
 import { DEFAULT_USER_AGENT, type Config } from './config.js';
 import { SessionImportError } from './errors.js';
 import { log } from './logger.js';
-import { truncate } from './util.js';
+import { safeErrorMessage, truncate } from './util.js';
 
 /**
  * Everything that knows the site runs on Supabase lives here.
@@ -228,6 +228,13 @@ async function supabaseCall(
       body = undefined;
     }
     return { status: res.status(), body, text };
+  } catch (error) {
+    // A network-level failure here used to propagate uncaught, crashing the
+    // caller with Playwright's raw error -- which embeds every request
+    // header, including the live Authorization bearer token, in its
+    // message. status: 0 distinguishes this from a real HTTP response for
+    // callers that care (refreshSession does).
+    return { status: 0, body: undefined, text: safeErrorMessage(error) };
   } finally {
     await ctx.dispose().catch(() => {});
   }
@@ -252,8 +259,11 @@ export async function refreshSession(
 
   if (status !== 200 || typeof body !== 'object' || body === null) {
     throw new SessionImportError(
-      `refresh failed with status ${status}: ${truncate(text, 300)}. The refresh token is ` +
-        'probably spent or revoked -- re-import a fresh cookie from your browser.',
+      status === 0
+        ? `could not reach Supabase to refresh the token: ${text}. This looks like a network ` +
+          'problem, not a rejected token -- worth a retry rather than re-importing a cookie.'
+        : `refresh failed with status ${status}: ${truncate(text, 300)}. The refresh token is ` +
+          'probably spent or revoked -- re-import a fresh cookie from your browser.',
     );
   }
 

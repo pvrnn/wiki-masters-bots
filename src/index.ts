@@ -13,6 +13,7 @@ import {
   SiteUnreachableError,
 } from './errors.js';
 import { configureLogger, log } from './logger.js';
+import { safeErrorMessage } from './util.js';
 import { notify } from './notify.js';
 import { runOnce } from './run.js';
 import { runDaemon } from './scheduler.js';
@@ -301,9 +302,11 @@ async function main(): Promise<number> {
       log.error(`run aborted: ${error.message}`);
       return EXIT.api;
     }
-    log.error('unexpected failure', {
-      error: error instanceof Error ? (error.stack ?? error.message) : String(error),
-    });
+    // First line only, not the full stack/message: this is the last-resort
+    // catch-all, so the error could be anything -- including a raw
+    // Playwright network error, whose message embeds every request header
+    // (session cookie included) after the first newline.
+    log.error('unexpected failure', { error: safeErrorMessage(error) });
     return EXIT.api;
   }
 }

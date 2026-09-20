@@ -97,7 +97,7 @@ every one. The ones that matter:
 | `WM_COOKIE` | unset | Session cookie; imported on first boot |
 | `WM_EMAIL` / `WM_PASSWORD` | unset | Only for `login` mode |
 | `WM_INTERVAL_MINUTES` | `61` | Daemon period |
-| `WM_OPEN_DELAY_MIN_MS` / `_MAX_MS` | `3000` / `4000` | Gap between opens |
+| `WM_OPEN_DELAY_MIN_MS` / `_MAX_MS` | `5000` / `10000` | Random gap between opens |
 | `WM_REQUEST_TIMEOUT_MS` | `180000` | Per request |
 | `WM_MAX_PACKS` | `200` | Iteration cap |
 | `WM_RUN_BUDGET_MS` | `2700000` | Wall clock per run; must be under the interval |
@@ -129,6 +129,18 @@ stop; think before overriding.
 `readRemaining()` in `src/packs.ts` is the only place to adjust.
 
 **`another run holds the lock`** — a previous run is still going. Expected, not an error.
+
+**A network timeout to the site** now shows as a short, clean retry log line
+(`kind: retryable`), not a crash. It used to be possible for a raw connection
+error to propagate uncaught — and Playwright's own error formatting for a
+failed request embeds every header of that request, cookie included, in the
+error message. A crash like that during development printed a live session
+straight to a terminal. Every place that talks to the site (`probeSession`,
+`postJson`, `supabaseCall`) now catches network failures and keeps only the
+first line of the error — the human-readable part, never the header dump —
+before it can reach a log line, a notification, or a terminal. `safeErrorMessage`
+in `src/util.ts` is the one place this happens; use it at any new call site
+that might see a raw error from a live request.
 
 ## A note on terms of service
 

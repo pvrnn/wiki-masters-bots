@@ -24,7 +24,7 @@ import {
   type StorageState,
   type SupabaseSession,
 } from './supabase.js';
-import { truncate } from './util.js';
+import { safeErrorMessage, truncate } from './util.js';
 
 export const OPEN_PACK_PATH = '/api/packs/open';
 
@@ -182,7 +182,7 @@ class ApiTransport implements PackTransport {
       return classifyResponse(res.status(), res.headers(), body, Date.now() - startedAt);
     } catch (error) {
       // Timeouts and socket errors land here; both are worth retrying.
-      return { kind: 'retryable', status: 0, detail: String(error) };
+      return { kind: 'retryable', status: 0, detail: safeErrorMessage(error) };
     }
   }
 
@@ -237,7 +237,7 @@ class BrowserTransport implements PackTransport {
       );
       return classifyResponse(result.status, result.headers, result.body, Date.now() - startedAt);
     } catch (error) {
-      return { kind: 'retryable', status: 0, detail: String(error) };
+      return { kind: 'retryable', status: 0, detail: safeErrorMessage(error) };
     }
   }
 
@@ -405,6 +405,12 @@ export async function probeSession(cfg: Config, path: string): Promise<OpenResul
     const res = await ctx.get(path, { timeout: cfg.requestTimeoutMs });
     const body = await res.text();
     return classifyResponse(res.status(), res.headers(), body, Date.now() - startedAt);
+  } catch (error) {
+    // A network-level failure (timeout, reset) here used to propagate
+    // uncaught -- crashing the caller with Playwright's raw error, which
+    // embeds every request header (session cookie included) in its message.
+    // Caught and classified like every other transient failure instead.
+    return { kind: 'retryable', status: 0, detail: safeErrorMessage(error) };
   } finally {
     await ctx.dispose().catch(() => {});
   }
@@ -444,6 +450,8 @@ export async function postJson(cfg: Config, path: string, body: unknown): Promis
     const res = await ctx.post(path, { data: body, timeout: cfg.requestTimeoutMs });
     const text = await res.text();
     return classifyResponse(res.status(), res.headers(), text, Date.now() - startedAt);
+  } catch (error) {
+    return { kind: 'retryable', status: 0, detail: safeErrorMessage(error) };
   } finally {
     await ctx.dispose().catch(() => {});
   }

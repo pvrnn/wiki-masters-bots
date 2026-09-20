@@ -98,8 +98,8 @@ export function loadConfig(): Config {
     throw new ConfigError(`WM_LOG_LEVEL must be debug|info|warn|error, got "${logLevel}"`);
   }
 
-  const openDelayMinMs = num('WM_OPEN_DELAY_MIN_MS', 3_000, 0, 600_000);
-  const openDelayMaxMs = num('WM_OPEN_DELAY_MAX_MS', 4_000, 0, 600_000);
+  const openDelayMinMs = num('WM_OPEN_DELAY_MIN_MS', 5_000, 0, 600_000);
+  const openDelayMaxMs = num('WM_OPEN_DELAY_MAX_MS', 10_000, 0, 600_000);
   if (openDelayMaxMs < openDelayMinMs) {
     throw new ConfigError(
       `WM_OPEN_DELAY_MAX_MS (${openDelayMaxMs}) must be >= WM_OPEN_DELAY_MIN_MS (${openDelayMinMs})`,

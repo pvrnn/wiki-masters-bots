@@ -8,7 +8,7 @@ import {
 import { log } from './logger.js';
 import { notify } from './notify.js';
 import { runOnce } from './run.js';
-import { sleep } from './util.js';
+import { safeErrorMessage, sleep } from './util.js';
 
 /** Never let the loop spin, even if a run somehow overruns the whole period. */
 const MIN_GAP_MS = 60_000;
@@ -49,8 +49,10 @@ export async function runDaemon(cfg: Config): Promise<void> {
       const outcome = await runOnce(cfg, controller.signal);
       log.info('run finished', outcome);
     } catch (error) {
-      // One bad run must never take down the daemon.
-      log.error('run failed', { error: error instanceof Error ? error.message : String(error) });
+      // One bad run must never take down the daemon. First line only -- see
+      // safeErrorMessage's doc comment for why a raw error message is unsafe
+      // to log here.
+      log.error('run failed', { error: safeErrorMessage(error) });
       // These all need a person; the rest are transient and just get logged.
       if (error instanceof LoginFailedError) {
         await notify(cfg, `wiki-masters bot: login failed (${error.reason}) — ${error.message}`);
