@@ -102,7 +102,7 @@ every one. The ones that matter:
 | `WM_OPEN_DELAY_MIN_MS` / `_MAX_MS` | `5000` / `10000` | Random gap between opens |
 | `WM_REQUEST_TIMEOUT_MS` | `180000` | Per request |
 | `WM_MAX_PACKS` | `200` | Iteration cap |
-| `WM_RUN_BUDGET_MS` | `2700000` | Wall clock per run; must be under the interval |
+| `WM_RUN_BUDGET_MS` | `1500000` | Wall clock per run; must be under the interval |
 | `WM_STALL_LIMIT` | `3` | Give up if `packs_remaining` stops falling |
 | `WM_PREFLIGHT` | `true` | Check the profile before opening anything |
 | `WM_ALLOW_WHEN_STRUCK` | `false` | Run even if the account is flagged |
