@@ -410,6 +410,45 @@ export async function probeSession(cfg: Config, path: string): Promise<OpenResul
   }
 }
 
+/**
+ * Issues one authenticated POST with a JSON body against a caller-supplied
+ * path, using the same saved session as everything else. Shares
+ * classifyResponse with the pack loop, so callers get the same
+ * unauthenticated/cloudflare/human-verification signals for free.
+ *
+ * Used by tools (like the collection-cleanup skill) that need to call a
+ * write endpoint other than /api/packs/open. Does NOT refresh the access
+ * token itself -- call ensureFreshSession(cfg) first if the caller might run
+ * long after the token was minted.
+ */
+export async function postJson(cfg: Config, path: string, body: unknown): Promise<OpenResult> {
+  const meta = readMeta(cfg);
+  const userAgent = cfg.userAgent ?? meta?.userAgent ?? DEFAULT_USER_AGENT;
+  const ctx = await request.newContext({
+    baseURL: cfg.baseUrl,
+    storageState: cfg.statePath,
+    timeout: cfg.requestTimeoutMs,
+    maxRedirects: 0,
+    extraHTTPHeaders: {
+      'User-Agent': userAgent,
+      Accept: 'application/json, text/plain, */*',
+      Origin: cfg.baseUrl,
+      Referer: `${cfg.baseUrl}/collection`,
+      'Sec-Fetch-Site': 'same-origin',
+      'Sec-Fetch-Mode': 'cors',
+      'Sec-Fetch-Dest': 'empty',
+    },
+  });
+  const startedAt = Date.now();
+  try {
+    const res = await ctx.post(path, { data: body, timeout: cfg.requestTimeoutMs });
+    const text = await res.text();
+    return classifyResponse(res.status(), res.headers(), text, Date.now() - startedAt);
+  } finally {
+    await ctx.dispose().catch(() => {});
+  }
+}
+
 
 // ---------------------------------------------------------------------------
 // Cookie-based sessions (Supabase)
