@@ -1,5 +1,10 @@
 import type { Config } from './config.js';
-import { AuthExpiredError, CloudflareBlockedError, PackRunAbortedError } from './errors.js';
+import {
+  AuthExpiredError,
+  CloudflareBlockedError,
+  HumanVerificationRequiredError,
+  PackRunAbortedError,
+} from './errors.js';
 import { log } from './logger.js';
 import type { PackTransport } from './session.js';
 import { backoffMs, jitteredDelay, sleep, truncate } from './util.js';
@@ -53,12 +58,14 @@ export async function drainPacks(
   transport: PackTransport,
   cfg: Config,
   signal?: AbortSignal,
+  /** Count from the profile pre-flight, so a stall is caught from the first open. */
+  knownRemaining?: number,
 ): Promise<DrainSummary> {
   let opened = 0;
   let consecutiveErrors = 0;
   let stalls = 0;
   let unknownShapeStreak = 0;
-  let lastRemaining: number | undefined;
+  let lastRemaining: number | undefined = knownRemaining;
   const deadline = Date.now() + cfg.runBudgetMs;
 
   for (;;) {
@@ -80,6 +87,12 @@ export async function drainPacks(
       case 'cloudflare':
         throw new CloudflareBlockedError(
           `Cloudflare blocked the pack endpoint (status ${result.status}): ${result.snippet}`,
+        );
+
+      case 'human-verification':
+        throw new HumanVerificationRequiredError(
+          `the site wants a fresh human verification before opening more packs ` +
+            `(status ${result.status}): ${result.snippet}`,
         );
 
       case 'unauthenticated':
@@ -104,6 +117,14 @@ export async function drainPacks(
       }
 
       case 'http-error':
+        // The site gates pack opening behind a periodic human check
+        // (`pack_human_verified_at`). Retrying cannot clear it.
+        if (/human|verif|captcha|turnstile/i.test(result.snippet)) {
+          throw new HumanVerificationRequiredError(
+            `the site wants a fresh human verification before opening more packs ` +
+              `(status ${result.status}): ${result.snippet}`,
+          );
+        }
         throw new PackRunAbortedError(
           `pack endpoint returned ${result.status}: ${result.snippet}`,
         );

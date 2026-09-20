@@ -8,10 +8,22 @@ import {
 } from 'playwright';
 import { loginBlockedUntil, recordLoginFailure, recordLoginSuccess } from './authledger.js';
 import { launchHardenedContext } from './browser.js';
-import type { Config } from './config.js';
+import { DEFAULT_USER_AGENT, type Config } from './config.js';
 import { LoginFailedError, LoginSuppressedError } from './errors.js';
 import { log } from './logger.js';
 import { performLogin } from './login.js';
+import {
+  decodeSession,
+  encodeSessionCookies,
+  isExpired,
+  describeExpiry,
+  parseCookieHeader,
+  refreshSession,
+  toStorageState,
+  type Cookie,
+  type StorageState,
+  type SupabaseSession,
+} from './supabase.js';
 import { truncate } from './util.js';
 
 export const OPEN_PACK_PATH = '/api/packs/open';
@@ -23,6 +35,7 @@ export const OPEN_PACK_PATH = '/api/packs/open';
 export type OpenResult =
   | { kind: 'json'; status: number; body: unknown; ms: number }
   | { kind: 'unauthenticated'; status: number }
+  | { kind: 'human-verification'; status: number; snippet: string }
   | { kind: 'cloudflare'; status: number; snippet: string }
   | { kind: 'http-error'; status: number; snippet: string }
   | { kind: 'retryable'; status: number; detail: string; retryAfterMs?: number };
@@ -77,6 +90,13 @@ function isCloudflareBlock(
   );
 }
 
+/**
+ * Markers for the site's `pack_human_verified_at` gate. Deliberately narrow --
+ * a bare /verif/ would also match things like "email_not_verified".
+ */
+const HUMAN_CHECK =
+  /human[_\s-]?verif|verify\s+you\s+are\s+human|pack_human|captcha|turnstile/i;
+
 function parseRetryAfter(headers: Record<string, string>): number | undefined {
   const raw = headers['retry-after'];
   if (!raw) return undefined;
@@ -109,6 +129,13 @@ export function classifyResponse(
     const location = headers['location'] ?? '';
     if (/\/login/i.test(location)) return { kind: 'unauthenticated', status };
     return { kind: 'http-error', status, snippet: `unexpected redirect to "${location}"` };
+  }
+
+  // Must come before the 401/403 branch: the site returns 403 for its periodic
+  // human check, and treating that as an expired session sends us off doing a
+  // pointless browser re-login instead of reporting the real blocker.
+  if (status >= 400 && HUMAN_CHECK.test(body)) {
+    return { kind: 'human-verification', status, snippet: truncate(body, 300) };
   }
 
   if (status === 401 || status === 403) return { kind: 'unauthenticated', status };
@@ -226,14 +253,10 @@ class BrowserTransport implements PackTransport {
 
 function buildApiTransport(cfg: Config): PackTransport {
   const meta = readMeta(cfg);
-  // The UA must match the one the login used, or the session may be rejected.
-  // That is also what lets a state file move between machines.
-  const userAgent = cfg.userAgent ?? meta?.userAgent;
-  if (!userAgent) {
-    log.warn('no recorded user agent; API calls will use Playwright\'s default', {
-      hint: 'run `npm run login` to record the browser UA alongside the session',
-    });
-  }
+  // Priority: explicit override, then the UA the browser login recorded (which
+  // is what lets a state file move between machines), then a plausible desktop
+  // Chrome for the cookie flow, where no browser was ever involved.
+  const userAgent = cfg.userAgent ?? meta?.userAgent ?? DEFAULT_USER_AGENT;
 
   const ctxPromise = request.newContext({
     baseURL: cfg.baseUrl,
@@ -242,11 +265,12 @@ function buildApiTransport(cfg: Config): PackTransport {
     // Do not follow redirects: a 302 to /login is how we detect a dead session.
     maxRedirects: 0,
     extraHTTPHeaders: {
-      ...(userAgent ? { 'User-Agent': userAgent } : {}),
+      'User-Agent': userAgent,
       Accept: 'application/json, text/plain, */*',
       'Accept-Language': `${cfg.locale},${cfg.locale.split('-')[0]};q=0.9`,
       Origin: cfg.baseUrl,
-      Referer: `${cfg.baseUrl}/`,
+      // The real site calls this from /pulls; mirror it.
+      Referer: `${cfg.baseUrl}/pulls`,
       'Sec-Fetch-Site': 'same-origin',
       'Sec-Fetch-Mode': 'cors',
       'Sec-Fetch-Dest': 'empty',
@@ -384,4 +408,78 @@ export async function probeSession(cfg: Config, path: string): Promise<OpenResul
   } finally {
     await ctx.dispose().catch(() => {});
   }
+}
+
+
+// ---------------------------------------------------------------------------
+// Cookie-based sessions (Supabase)
+// ---------------------------------------------------------------------------
+
+function readStorageState(cfg: Config): StorageState | undefined {
+  try {
+    return JSON.parse(readFileSync(cfg.statePath, 'utf8')) as StorageState;
+  } catch {
+    return undefined;
+  }
+}
+
+function writeStorageState(cfg: Config, state: StorageState): void {
+  mkdirSync(dirname(cfg.statePath), { recursive: true });
+  writeFileSync(cfg.statePath, `${JSON.stringify(state, null, 2)}\n`);
+  protect(cfg.statePath);
+}
+
+/** Turns a pasted Cookie header into the session file the rest of the bot uses. */
+export function importCookie(raw: string, cfg: Config): SupabaseSession {
+  const cookies = parseCookieHeader(raw);
+  const session = decodeSession(cookies);
+  writeStorageState(cfg, toStorageState(cookies, cfg));
+  writeMeta(cfg, {
+    savedAt: new Date().toISOString(),
+    ...(cfg.userAgent ? { userAgent: cfg.userAgent } : {}),
+  });
+  return session;
+}
+
+/** Pulls the Supabase session out of the saved cookie jar, if there is one. */
+export function loadSession(cfg: Config): SupabaseSession | undefined {
+  const state = readStorageState(cfg);
+  if (!state?.cookies?.length) return undefined;
+  try {
+    return decodeSession(state.cookies.map((c) => ({ name: c.name, value: c.value })));
+  } catch {
+    // A password-login session has no Supabase cookie; that is fine.
+    return undefined;
+  }
+}
+
+/** Replaces the auth cookies in the saved jar, leaving any others untouched. */
+function persistSessionCookies(cfg: Config, fresh: Cookie[]): void {
+  const existing = readStorageState(cfg);
+  const isAuth = (name: string): boolean => /^sb-.+-auth-token(\.\d+)?$/.test(name);
+  const kept = (existing?.cookies ?? []).filter((c) => !isAuth(c.name));
+  const added = toStorageState(fresh, cfg).cookies;
+  writeStorageState(cfg, { cookies: [...kept, ...added], origins: [] });
+}
+
+/**
+ * Guarantees a usable access token.
+ *
+ * The site issues 60-minute tokens and the bot runs every 61, so on a normal
+ * schedule the saved token is ALWAYS expired -- refreshing is the common path,
+ * not the exception. The rotated refresh token is written back immediately;
+ * losing it would break the chain permanently.
+ */
+export async function ensureFreshSession(cfg: Config): Promise<SupabaseSession | undefined> {
+  const session = loadSession(cfg);
+  if (!session) return undefined;
+
+  if (!isExpired(session, cfg.tokenSkewMs)) {
+    log.info('access token still valid', { expiry: describeExpiry(session) });
+    return session;
+  }
+
+  const { session: refreshed, raw } = await refreshSession(session, cfg);
+  persistSessionCookies(cfg, encodeSessionCookies(refreshed, raw));
+  return refreshed;
 }

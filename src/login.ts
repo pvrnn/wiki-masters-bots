@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserContext, Locator, Page } from 'playwright';
-import type { Config } from './config.js';
+import { requireCredentials, type Config } from './config.js';
 import { humanMouseTo, humanType, readUserAgent } from './browser.js';
 import { LoginFailedError, SiteUnreachableError } from './errors.js';
 import { log } from './logger.js';
@@ -117,6 +117,7 @@ export async function performLogin(
   context: BrowserContext,
   cfg: Config,
 ): Promise<LoginResult> {
+  const { email: emailValue, password: passwordValue } = requireCredentials(cfg);
   const page = await context.newPage();
   try {
     const loginUrl = `${cfg.baseUrl}/login`;
@@ -137,8 +138,8 @@ export async function performLogin(
     const email = await firstVisible(emailCandidates(page), 'email');
     const password = await firstVisible(passwordCandidates(page), 'password');
 
-    await humanType(page, email, cfg.email);
-    await humanType(page, password, cfg.password);
+    await humanType(page, email, emailValue);
+    await humanType(page, password, passwordValue);
 
     // Before submitting: many forms keep the submit button disabled until the
     // Turnstile token exists.

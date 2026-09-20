@@ -14,7 +14,8 @@
     "run:once": "node --env-file-if-exists=.env dist/index.js run",
     "login": "node --env-file-if-exists=.env dist/index.js login",
     "probe": "node --env-file-if-exists=.env dist/index.js probe",
-    "dev": "npm run build && node --env-file-if-exists=.env dist/index.js run"
+    "dev": "npm run build && node --env-file-if-exists=.env dist/index.js run",
+    "import-cookie": "node --env-file-if-exists=.env dist/index.js import-cookie"
   },
   "dependencies": {
     "playwright": "1.56.1"

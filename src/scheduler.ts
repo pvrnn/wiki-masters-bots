@@ -1,5 +1,10 @@
 import type { Config } from './config.js';
-import { LoginFailedError } from './errors.js';
+import {
+  AccountSanctionedError,
+  HumanVerificationRequiredError,
+  LoginFailedError,
+  SessionImportError,
+} from './errors.js';
 import { log } from './logger.js';
 import { notify } from './notify.js';
 import { runOnce } from './run.js';
@@ -46,8 +51,15 @@ export async function runDaemon(cfg: Config): Promise<void> {
     } catch (error) {
       // One bad run must never take down the daemon.
       log.error('run failed', { error: error instanceof Error ? error.message : String(error) });
+      // These all need a person; the rest are transient and just get logged.
       if (error instanceof LoginFailedError) {
         await notify(cfg, `wiki-masters bot: login failed (${error.reason}) — ${error.message}`);
+      } else if (error instanceof HumanVerificationRequiredError) {
+        await notify(cfg, 'wiki-masters bot: needs a human verification before opening more packs');
+      } else if (error instanceof AccountSanctionedError) {
+        await notify(cfg, `wiki-masters bot: account flagged — ${error.message}`);
+      } else if (error instanceof SessionImportError) {
+        await notify(cfg, `wiki-masters bot: session needs re-importing — ${error.message}`);
       }
     }
 

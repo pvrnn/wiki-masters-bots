@@ -44,5 +44,25 @@ export class LoginSuppressedError extends Error {
   }
 }
 
+/**
+ * A supplied cookie could not be decoded, or its refresh token is spent.
+ * Distinct from LoginFailedError: the password flow was never involved, so this
+ * must not consume the login backoff ledger.
+ */
+export class SessionImportError extends Error {}
+
+/**
+ * The site wants a fresh human verification before it will open more packs
+ * (the `pack_human_verified_at` gate). No amount of retrying helps -- a person
+ * has to open a pack in a real browser.
+ */
+export class HumanVerificationRequiredError extends Error {}
+
+/**
+ * The account carries strikes, a sanction or an activity block. We stop rather
+ * than keep poking it.
+ */
+export class AccountSanctionedError extends Error {}
+
 /** The pack loop stopped early for a reason that needs a human. */
 export class PackRunAbortedError extends Error {}
