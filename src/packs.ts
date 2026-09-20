@@ -8,6 +8,7 @@ import {
 import { log } from './logger.js';
 import type { PackTransport } from './session.js';
 import { backoffMs, jitteredDelay, sleep, truncate } from './util.js';
+import { recordPulls } from './pullslog.js';
 
 export type DrainSummary = {
   opened: number;
@@ -143,6 +144,7 @@ export async function drainPacks(
       remaining,
       response: summarize(result.body),
     });
+    recordPulls(cfg, opened, result.body);
 
     if (remaining === 0) {
       log.info('all packs opened', { opened });

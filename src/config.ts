@@ -33,6 +33,8 @@ export type Config = {
   profileDir: string;
   lockPath: string;
   ledgerPath: string;
+  /** Append-only JSONL: one line per pack opened, holding its raw response. */
+  allPulledPath: string;
   debugDir: string;
 
   /** Undefined means "use the real browser's own UA", which is what we want. */
@@ -155,6 +157,7 @@ export function loadConfig(): Config {
     profileDir: resolve(str('WM_PROFILE_DIR', './data/profile')),
     lockPath: resolve(str('WM_LOCK_PATH', './data/bot.lock')),
     ledgerPath: resolve(str('WM_LEDGER_PATH', './data/auth-ledger.json')),
+    allPulledPath: resolve(str('WM_ALL_PULLED_PATH', './data/all-pulled.logs')),
     debugDir: resolve(str('WM_DEBUG_DIR', './data/debug')),
 
     userAgent: optional('WM_USER_AGENT'),
