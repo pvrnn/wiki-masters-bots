@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>wiki-masters — ménage de collection</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<header>
+  <h1>Ménage de collection</h1>
+  <span class="stat" id="stat-total"></span>
+  <input id="search" type="search" placeholder="Filtrer par titre ou catégorie…" />
+  <select id="origin-filter" title="Filtrer par origine">
+    <option value="tous">Toutes origines</option>
+    <option value="france">🇫🇷 France seulement</option>
+    <option value="etranger">🌍 Étranger seulement</option>
+    <option value="inconnu">Origine inconnue</option>
+  </select>
+  <div class="header-actions">
+    <button id="btn-reload">Recharger</button>
+  </div>
+</header>
+
+<main id="main">
+  <p class="empty-note">Chargement…</p>
+</main>
+
+<div class="selection-bar" id="selection-bar" style="display:none">
+  <span class="count" id="selection-count">0 sélectionnée(s)</span>
+  <button id="btn-clear">Tout désélectionner</button>
+  <span class="spacer"></span>
+  <button class="danger" id="btn-discard" disabled>Défausser la sélection</button>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

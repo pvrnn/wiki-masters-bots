@@ -1,9 +1,9 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { BrowserContext, Locator, Page } from 'playwright';
-import type { Config } from './config.js';
+import { requireCredentials, type Config } from './config.js';
 import { humanMouseTo, humanType, readUserAgent } from './browser.js';
-import { LoginFailedError } from './errors.js';
+import { LoginFailedError, SiteUnreachableError } from './errors.js';
 import { log } from './logger.js';
 import { handleTurnstile } from './turnstile.js';
 import { onlyOnSuccess, randInt, sleep } from './util.js';
@@ -117,18 +117,29 @@ export async function performLogin(
   context: BrowserContext,
   cfg: Config,
 ): Promise<LoginResult> {
+  const { email: emailValue, password: passwordValue } = requireCredentials(cfg);
   const page = await context.newPage();
   try {
     const loginUrl = `${cfg.baseUrl}/login`;
     log.info('opening the login page', { url: loginUrl });
-    await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    try {
+      await page.goto(loginUrl, { waitUntil: 'domcontentloaded', timeout: 60_000 });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      if (/net::ERR_|ERR_PROXY|NS_ERROR|Timeout .* exceeded/i.test(detail)) {
+        throw new SiteUnreachableError(
+          `could not reach ${loginUrl} -- ${detail.split('\n')[0] ?? detail}`,
+        );
+      }
+      throw error;
+    }
     await page.waitForLoadState('load', { timeout: 30_000 }).catch(() => {});
 
     const email = await firstVisible(emailCandidates(page), 'email');
     const password = await firstVisible(passwordCandidates(page), 'password');
 
-    await humanType(page, email, cfg.email);
-    await humanType(page, password, cfg.password);
+    await humanType(page, email, emailValue);
+    await humanType(page, password, passwordValue);
 
     // Before submitting: many forms keep the submit button disabled until the
     // Turnstile token exists.

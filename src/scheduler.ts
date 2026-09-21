@@ -1,9 +1,14 @@
 import type { Config } from './config.js';
-import { LoginFailedError } from './errors.js';
+import {
+  AccountSanctionedError,
+  HumanVerificationRequiredError,
+  LoginFailedError,
+  SessionImportError,
+} from './errors.js';
 import { log } from './logger.js';
 import { notify } from './notify.js';
 import { runOnce } from './run.js';
-import { sleep } from './util.js';
+import { safeErrorMessage, sleep } from './util.js';
 
 /** Never let the loop spin, even if a run somehow overruns the whole period. */
 const MIN_GAP_MS = 60_000;
@@ -13,7 +18,7 @@ const MIN_GAP_MS = 60_000;
  * repeat. The wait is anchored to when the run *started*, so the cadence is a
  * true interval rather than "interval plus however long the run took".
  *
- * Plain cron cannot express 61 minutes, which is why this exists.
+ * Plain cron cannot anchor to the run start, which is why this exists.
  */
 export async function runDaemon(cfg: Config): Promise<void> {
   const controller = new AbortController();
@@ -44,10 +49,19 @@ export async function runDaemon(cfg: Config): Promise<void> {
       const outcome = await runOnce(cfg, controller.signal);
       log.info('run finished', outcome);
     } catch (error) {
-      // One bad run must never take down the daemon.
-      log.error('run failed', { error: error instanceof Error ? error.message : String(error) });
+      // One bad run must never take down the daemon. First line only -- see
+      // safeErrorMessage's doc comment for why a raw error message is unsafe
+      // to log here.
+      log.error('run failed', { error: safeErrorMessage(error) });
+      // These all need a person; the rest are transient and just get logged.
       if (error instanceof LoginFailedError) {
         await notify(cfg, `wiki-masters bot: login failed (${error.reason}) — ${error.message}`);
+      } else if (error instanceof HumanVerificationRequiredError) {
+        await notify(cfg, 'wiki-masters bot: needs a human verification before opening more packs');
+      } else if (error instanceof AccountSanctionedError) {
+        await notify(cfg, `wiki-masters bot: account flagged — ${error.message}`);
+      } else if (error instanceof SessionImportError) {
+        await notify(cfg, `wiki-masters bot: session needs re-importing — ${error.message}`);
       }
     }
 

@@ -2,16 +2,39 @@ import { resolve } from 'node:path';
 import { ConfigError } from './errors.js';
 import { isLogLevel, type LogLevel } from './logger.js';
 
+/**
+ * Used when no browser UA has been recorded -- i.e. the cookie flow, where no
+ * browser is ever launched. Identifying as Playwright/undici to the site would
+ * be a needless tell, so we present an ordinary desktop Chrome instead.
+ */
+export const DEFAULT_USER_AGENT =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) ' +
+  'Chrome/153.0.0.0 Safari/537.36';
+
 export type Config = {
-  email: string;
-  password: string;
+  /** Only the `login` mode needs these; the cookie flow does not. */
+  email: string | undefined;
+  password: string | undefined;
   baseUrl: string;
+
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  /** Raw Cookie header, imported on startup when no session exists yet. */
+  cookie: string | undefined;
+  /** Refresh the access token this long before it actually expires. */
+  tokenSkewMs: number;
+  /** Read the account profile before opening anything. */
+  preflight: boolean;
+  /** Run even if the account shows strikes or a sanction. */
+  allowWhenStruck: boolean;
 
   statePath: string;
   metaPath: string;
   profileDir: string;
   lockPath: string;
   ledgerPath: string;
+  /** Append-only JSONL: one line per pack opened, holding its raw response. */
+  allPulledPath: string;
   debugDir: string;
 
   /** Undefined means "use the real browser's own UA", which is what we want. */
@@ -40,12 +63,6 @@ export type Config = {
   probePath: string | undefined;
   logLevel: LogLevel;
 };
-
-function required(name: string): string {
-  const raw = process.env[name]?.trim();
-  if (!raw) throw new ConfigError(`${name} is required (set it in .env or the environment)`);
-  return raw;
-}
 
 function str(name: string, fallback: string): string {
   const raw = process.env[name]?.trim();
@@ -83,16 +100,16 @@ export function loadConfig(): Config {
     throw new ConfigError(`WM_LOG_LEVEL must be debug|info|warn|error, got "${logLevel}"`);
   }
 
-  const openDelayMinMs = num('WM_OPEN_DELAY_MIN_MS', 3_000, 0, 600_000);
-  const openDelayMaxMs = num('WM_OPEN_DELAY_MAX_MS', 4_000, 0, 600_000);
+  const openDelayMinMs = num('WM_OPEN_DELAY_MIN_MS', 5_000, 0, 600_000);
+  const openDelayMaxMs = num('WM_OPEN_DELAY_MAX_MS', 10_000, 0, 600_000);
   if (openDelayMaxMs < openDelayMinMs) {
     throw new ConfigError(
       `WM_OPEN_DELAY_MAX_MS (${openDelayMaxMs}) must be >= WM_OPEN_DELAY_MIN_MS (${openDelayMinMs})`,
     );
   }
 
-  const intervalMinutes = num('WM_INTERVAL_MINUTES', 61, 1, 10_080);
-  const runBudgetMs = num('WM_RUN_BUDGET_MS', 2_700_000, 10_000, 86_400_000);
+  const intervalMinutes = num('WM_INTERVAL_MINUTES', 30, 1, 10_080);
+  const runBudgetMs = num('WM_RUN_BUDGET_MS', 1_500_000, 10_000, 86_400_000);
   if (runBudgetMs >= intervalMinutes * 60_000) {
     throw new ConfigError(
       `WM_RUN_BUDGET_MS (${runBudgetMs}) must be less than the schedule interval ` +
@@ -117,15 +134,30 @@ export function loadConfig(): Config {
   }
 
   return {
-    email: required('WM_EMAIL'),
-    password: required('WM_PASSWORD'),
+    email: optional('WM_EMAIL'),
+    password: optional('WM_PASSWORD'),
     baseUrl,
+
+    supabaseUrl: str('WM_SUPABASE_URL', 'https://cyrxjeppjqsxxjayfrur.supabase.co').replace(
+      /\/+$/,
+      '',
+    ),
+    // Public by design -- this key is shipped to every visitor's browser.
+    supabaseAnonKey: str(
+      'WM_SUPABASE_ANON_KEY',
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN5cnhqZXBwanFzeHhqYXlmcnVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4ODAzMzksImV4cCI6MjA4OTQ1NjMzOX0.BZluyXygNxuQGDPxFX1zG5i-cqp10CVK-8GGtuak4Rg',
+    ),
+    cookie: optional('WM_COOKIE'),
+    tokenSkewMs: num('WM_TOKEN_SKEW_MS', 120_000, 0, 3_000_000),
+    preflight: bool('WM_PREFLIGHT', true),
+    allowWhenStruck: bool('WM_ALLOW_WHEN_STRUCK', false),
 
     statePath: resolve(str('WM_STATE_PATH', './data/storage-state.json')),
     metaPath: resolve(str('WM_META_PATH', './data/session-meta.json')),
     profileDir: resolve(str('WM_PROFILE_DIR', './data/profile')),
     lockPath: resolve(str('WM_LOCK_PATH', './data/bot.lock')),
     ledgerPath: resolve(str('WM_LEDGER_PATH', './data/auth-ledger.json')),
+    allPulledPath: resolve(str('WM_ALL_PULLED_PATH', './data/all-pulled.logs')),
     debugDir: resolve(str('WM_DEBUG_DIR', './data/debug')),
 
     userAgent: optional('WM_USER_AGENT'),
@@ -152,4 +184,18 @@ export function loadConfig(): Config {
     probePath: optional('WM_PROBE_PATH'),
     logLevel,
   };
+}
+
+/**
+ * The password login needs credentials; the cookie flow does not, so they are
+ * only demanded at the point of use.
+ */
+export function requireCredentials(cfg: Config): { email: string; password: string } {
+  if (!cfg.email || !cfg.password) {
+    throw new ConfigError(
+      'WM_EMAIL and WM_PASSWORD are required for `login` mode. If you are supplying a ' +
+        'session cookie instead, use `npm run import-cookie`.',
+    );
+  }
+  return { email: cfg.email, password: cfg.password };
 }

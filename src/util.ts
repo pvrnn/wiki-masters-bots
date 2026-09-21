@@ -39,3 +39,20 @@ export function onlyOnSuccess<T>(p: Promise<T>): Promise<T> {
 export function truncate(s: string, max = 500): string {
   return s.length <= max ? s : `${s.slice(0, max)}... [${s.length} bytes total]`;
 }
+
+/**
+ * A caught error's message, safe to log, return, or notify with.
+ *
+ * Playwright's network-error messages embed a full request "Call log" after
+ * the first newline -- every header verbatim, including Cookie and
+ * Authorization. A live crash during development leaked a full session this
+ * way (uncaught network error -> default error formatting -> printed
+ * straight to a terminal). Only the first line is ever safe to surface; the
+ * short human-readable message is always on it, the header dump never is.
+ * Use this at every point an error that might have come from a Playwright
+ * request could otherwise be stringified.
+ */
+export function safeErrorMessage(error: unknown): string {
+  const raw = error instanceof Error ? error.message : String(error);
+  return raw.split('\n')[0]?.trim() || raw;
+}
