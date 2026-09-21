@@ -8,17 +8,21 @@ import {
 import { log } from './logger.js';
 import { notify } from './notify.js';
 import { runOnce } from './run.js';
-import { safeErrorMessage, sleep } from './util.js';
+import { jitteredDelay, safeErrorMessage, sleep } from './util.js';
 
 /** Never let the loop spin, even if a run somehow overruns the whole period. */
 const MIN_GAP_MS = 60_000;
 
 /**
- * Long-running mode for the container: run, wait out the rest of the period,
- * repeat. The wait is anchored to when the run *started*, so the cadence is a
- * true interval rather than "interval plus however long the run took".
+ * Long-running mode for the container: run, wait out the rest of a randomly
+ * chosen period, repeat. The wait is anchored to when the run *started*, so
+ * the cadence is a true interval rather than "interval plus however long the
+ * run took", and a fresh interval is rolled each cycle within
+ * [intervalMinMinutes, intervalMaxMinutes] rather than reused, so the
+ * cadence itself doesn't read as machine-generated.
  *
- * Plain cron cannot anchor to the run start, which is why this exists.
+ * Plain cron cannot anchor to the run start or jitter its own period, which
+ * is why this exists.
  */
 export async function runDaemon(cfg: Config): Promise<void> {
   const controller = new AbortController();
@@ -36,9 +40,9 @@ export async function runDaemon(cfg: Config): Promise<void> {
   process.on('SIGTERM', () => stop('SIGTERM'));
   process.on('SIGINT', () => stop('SIGINT'));
 
-  const periodMs = cfg.intervalMinutes * 60_000;
   log.info('daemon started', {
-    intervalMinutes: cfg.intervalMinutes,
+    intervalMinMinutes: cfg.intervalMinMinutes,
+    intervalMaxMinutes: cfg.intervalMaxMinutes,
     baseUrl: cfg.baseUrl,
   });
 
@@ -67,10 +71,12 @@ export async function runDaemon(cfg: Config): Promise<void> {
 
     if (stopping) break;
 
+    const periodMs = jitteredDelay(cfg.intervalMinMinutes * 60_000, cfg.intervalMaxMinutes * 60_000);
     const waitMs = Math.max(MIN_GAP_MS, periodMs - (Date.now() - startedAt));
     log.info('next run scheduled', {
       at: new Date(Date.now() + waitMs).toISOString(),
       waitMs,
+      periodMs,
     });
     await sleep(waitMs, controller.signal);
   }
