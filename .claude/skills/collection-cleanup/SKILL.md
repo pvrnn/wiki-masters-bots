@@ -63,18 +63,45 @@ or `npm run login` first if none exists. The build has to be current:
    ```
    node .claude/skills/collection-cleanup/scripts/build-grouped.mjs
    ```
-   Writes `data/collection-grouped.json`. `classify-theme.mjs` is a
-   keyword/regex classifier over each card's Wikipedia category (title as
-   fallback when the category is null) — not an LLM call, because these
-   category strings are systematic enough that a rule list gets good coverage
-   for free and stays deterministic. The build script prints how many cards
-   landed in "Autres / non classé" (the catch-all).
+   Writes `data/collection-grouped.json`. Classification is two layers, tried
+   in order:
 
-   **If that bucket is large** (rule of thumb: over ~20%), don't just accept
-   it — read `data/collection-categories.json` (sorted by frequency, so the
-   highest-value misses are at the top), find the recurring patterns landing
-   in Autres, and add rules to `classify-theme.mjs`. Two gotchas hit during
-   the original tuning pass, worth knowing before you repeat them:
+   1. **`category-lookup.json`** — a flat `{ "<category or title text>": [themeKey, origin] }`
+      dictionary, hand-curated by an agent actually reading each category and
+      judging it ("The Residents are American", "Yannick Noah is French",
+      "Weta Workshop is a New Zealand company") — the exact cases no regex can
+      get right, since the fact isn't spelled out in the text at all. Checked
+      first; a hit skips the regex entirely for that card. Committed to the
+      repo (unlike `data/*.json`): these are facts about the world, as
+      reusable for any other wiki-masters collection as the regex rules are,
+      not personal collection data.
+   2. **`classify-theme.mjs` / `classify-origin.mjs`** — the regex fallback,
+      for anything not yet in the lookup (new categories from future pulls,
+      or ones nobody's gotten to yet). Not an LLM call at runtime — these
+      category strings are systematic enough that a rule list gets good
+      coverage for free and stays deterministic and fast.
+
+   The build script prints how many cards a lookup hit resolved, and how many
+   landed in "Autres / non classé" (the regex path's catch-all) after both
+   layers ran.
+
+   **Extending the lookup** (preferred over adding more regex rules for
+   anything requiring actual knowledge rather than a pattern): read
+   `data/collection-categories.json` for what's still unclassified, judge
+   each one, add entries to `category-lookup.json`, re-run this step. A pass
+   over 499 previously-unclassified categories (416 successfully judged) took
+   theme-"Autres" from 29.9% to 5.9% and origin-"inconnu" from 52.6% to 31.0%
+   on the collection it was built against — most of the regex's remaining
+   gaps are genuinely un-knowable (a bare "type d'indice" has no theme or
+   nationality to find, in the text or in the world), not classifier misses.
+
+   **If the *regex* bucket is large** (rule of thumb: over ~20% after the
+   lookup has run), don't just accept it — read
+   `data/collection-categories.json` (sorted by frequency, so the
+   highest-value misses are at the top), find the recurring *patterns*
+   landing in Autres (as opposed to one-off facts, which belong in the
+   lookup instead), and add rules to `classify-theme.mjs`. Two gotchas hit
+   during the original tuning pass, worth knowing before you repeat them:
    - JavaScript's `\b` only recognises ASCII word characters. `\bmaison à\b`
      silently never matches, because `\b` right before/after an accented
      letter (à, é, î, œ, …) never fires — the accented letter itself isn't a
@@ -89,12 +116,13 @@ or `npm run login` first if none exists. The build has to be current:
      tried in file order, first match wins.
    - Then re-run this step and check the new percentage.
 
-   The same step also tags each card with an **origin** — `france` /
-   `etranger` / `inconnu` (`classify-origin.mjs`), a second axis independent
-   of theme, since "is this French" cuts across Géographie, Personnalités,
-   Transports, Sport, etc. rather than being a theme of its own. Built the
-   same way, from the real category data, with two things worth knowing
-   before extending it:
+   `origin` (`france` / `etranger` / `inconnu`, from `classify-origin.mjs` in
+   the regex layer) is a second axis independent of theme, since "is this
+   French" cuts across Géographie, Personnalités, Transports, Sport, etc.
+   rather than being a theme of its own — `category-lookup.json` entries
+   carry both `[themeKey, origin]` together for exactly this reason. Two
+   things worth knowing before extending the origin *regex specifically*
+   (the lookup table needs no such care — it's just facts, not patterns):
    - A first pass covering only nationality adjectives ("acteur américain")
      plus a handful of hand-picked "de/du \<country>" phrases left roughly
      half of Géographie & Lieux as "inconnu" -- nearly all of it checkably
@@ -137,11 +165,12 @@ or `npm run login` first if none exists. The build has to be current:
 ## Files
 
 ```
+category-lookup.json     agent-curated {theme, origin} per category (extend this first)
 scripts/
   fetch-collection.mjs   read-only pagination of /api/my-collection
-  classify-theme.mjs     the rule-based theme classifier (tune this)
-  classify-origin.mjs    france / etranger / inconnu classifier (tune this)
-  build-grouped.mjs      raw collection -> grouped JSON
+  classify-theme.mjs     the regex theme classifier -- fallback for what's not in the lookup
+  classify-origin.mjs    the regex france/etranger/inconnu classifier -- same fallback role
+  build-grouped.mjs      raw collection -> grouped JSON (checks the lookup, then the regexes)
   serve-review.mjs       local server: static UI + /api/collection + /api/discard
 public/
   index.html, app.js, style.css   the review UI (vanilla JS, no build step)
