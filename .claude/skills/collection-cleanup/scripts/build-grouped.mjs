@@ -9,6 +9,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { classifyTheme } from './classify-theme.mjs';
+import { classifyOrigin } from './classify-origin.mjs';
 
 const REPO_ROOT = resolve(new URL('../../../../', import.meta.url).pathname);
 const rawPath = resolve(REPO_ROOT, 'data/collection-raw.json');
@@ -39,25 +40,31 @@ function rankOf(rarity) {
 
 // rarity -> theme key -> { label, cards: [] }
 const buckets = new Map();
+const originCounts = { france: 0, etranger: 0, inconnu: 0 };
 
 for (const item of raw.collection) {
   const card = item.card ?? {};
   const rarity = card.rarity ?? '?';
   const theme = classifyTheme(card.category, card.wikipedia_title);
+  const origin = classifyOrigin(card.category, card.wikipedia_title);
+  originCounts[origin] += 1;
 
   if (!buckets.has(rarity)) buckets.set(rarity, new Map());
   const byTheme = buckets.get(rarity);
   if (!byTheme.has(theme.key)) byTheme.set(theme.key, { label: theme.label, cards: [] });
 
   byTheme.get(theme.key).cards.push({
-    // Both ids are kept, but discard-server.mjs uses card_id -- see the field
-    // comment there for why, and how to flip it if a live test shows it is
-    // wrong for this account.
+    // Both ids are kept, but serve-review.mjs's discard call uses row_id
+    // (the collection row's own id) -- see that file for why.
     row_id: item.id,
     card_id: item.card_id,
     title: card.wikipedia_title ?? '(untitled)',
     category: card.category ?? null,
     rarity,
+    // 'france' | 'etranger' | 'inconnu' -- see classify-origin.mjs. A
+    // separate axis from theme: cuts across Géographie, Personnalités,
+    // Transports etc. rather than being a theme of its own.
+    origin,
     atk: card.atk ?? null,
     def: card.def ?? null,
     q_score: card.q_score ?? null,
@@ -118,6 +125,10 @@ console.log(`${total} cards across ${groups.length} rarity tiers.`);
 for (const g of groups) {
   console.log(`  ${g.rarity.padEnd(3)} ${String(g.count).padStart(4)} cards, ${g.themes.length} themes`);
 }
+console.log(
+  `\nOrigine: France ${originCounts.france} · Étranger ${originCounts.etranger} · ` +
+    `Inconnu ${originCounts.inconnu} (${((originCounts.inconnu / total) * 100).toFixed(1)}%)`,
+);
 const autresTotal = groups.flatMap((g) => g.themes).find((t) => t.key === 'autres');
 if (autresTotal) {
   const totalAutres = groups

@@ -6,6 +6,7 @@
 // sees) the site's cookies.
 
 const RARITY_LABEL = { L: 'Légendaire', UR: 'Ultra Rare', SR: 'Super Rare', R: 'Rare', PC: 'Peu Commune', C: 'Commune' };
+const ORIGIN_BADGE = { france: '🇫🇷', etranger: '🌍' }; // no badge for 'inconnu' -- nothing to signal
 
 const state = {
   data: null,
@@ -18,10 +19,12 @@ const state = {
   byId: new Map(),
   selected: new Set(),
   query: '',
+  originFilter: 'tous',
 };
 
 const $main = document.getElementById('main');
 const $search = document.getElementById('search');
+const $originFilter = document.getElementById('origin-filter');
 const $statTotal = document.getElementById('stat-total');
 const $selBar = document.getElementById('selection-bar');
 const $selCount = document.getElementById('selection-count');
@@ -53,7 +56,8 @@ async function loadCollection() {
   render();
 }
 
-function cardMatchesQuery(card) {
+function cardMatchesFilters(card) {
+  if (state.originFilter !== 'tous' && card.origin !== state.originFilter) return false;
   if (!state.query) return true;
   const hay = normalize(`${card.title} ${card.category ?? ''}`);
   return hay.includes(state.query);
@@ -139,9 +143,11 @@ function renderCard(card) {
     ? `<img src="${card.image_url}" loading="lazy" alt="" />`
     : `<span class="noimg">pas d'image</span>`;
 
+  const originBadge = ORIGIN_BADGE[card.origin];
   el.innerHTML = `
     <div class="check">✓</div>
     ${card.starred ? '<div class="starred">★</div>' : ''}
+    ${originBadge ? `<div class="origin-badge" title="${card.origin === 'france' ? 'France' : 'Étranger'}">${originBadge}</div>` : ''}
     <div class="thumb">${img}</div>
     <div class="info">
       <p class="title" title="${escapeAttr(card.title)}">${escapeHtml(card.title)}</p>
@@ -173,8 +179,15 @@ function toggleCard(cardId, el) {
   updateSelectionBar();
 }
 
+/**
+ * Only affects cards passing the current search/origin filters, not every
+ * card in the theme -- otherwise filtering to "Étranger" and clicking
+ * "select all" would silently also select the French cards hidden by that
+ * same filter, which defeats the point of having the filter at all.
+ */
 function toggleThemeSelection(theme) {
-  const ids = theme.cards.map((c) => c.row_id);
+  const ids = theme.cards.filter(cardMatchesFilters).map((c) => c.row_id);
+  if (ids.length === 0) return;
   const allSelected = ids.every((id) => state.selected.has(id));
   for (const id of ids) {
     if (allSelected) state.selected.delete(id);
@@ -192,9 +205,10 @@ function updateSelectionBar() {
 
 function applyFilter() {
   state.query = normalize($search.value.trim());
+  state.originFilter = $originFilter.value;
   for (const el of document.querySelectorAll('.card')) {
     const card = state.byId.get(el.dataset.rowId);
-    el.classList.toggle('hidden', card ? !cardMatchesQuery(card) : true);
+    el.classList.toggle('hidden', card ? !cardMatchesFilters(card) : true);
   }
   // Hide theme blocks / rarity groups that end up empty after filtering, so a
   // search doesn't leave a wall of collapsed-looking empty sections.
@@ -209,6 +223,7 @@ function applyFilter() {
 }
 
 $search.addEventListener('input', applyFilter);
+$originFilter.addEventListener('change', applyFilter);
 $btnReload.addEventListener('click', loadCollection);
 $btnClear.addEventListener('click', () => {
   state.selected.clear();

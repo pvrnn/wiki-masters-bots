@@ -89,6 +89,29 @@ or `npm run login` first if none exists. The build has to be current:
      tried in file order, first match wins.
    - Then re-run this step and check the new percentage.
 
+   The same step also tags each card with an **origin** — `france` /
+   `etranger` / `inconnu` (`classify-origin.mjs`), a second axis independent
+   of theme, since "is this French" cuts across Géographie, Personnalités,
+   Transports, Sport, etc. rather than being a theme of its own. Built the
+   same way, from the real category data, with two things worth knowing
+   before extending it:
+   - A first pass covering only nationality adjectives ("acteur américain")
+     plus a handful of hand-picked "de/du \<country>" phrases left roughly
+     half of Géographie & Lieux as "inconnu" -- nearly all of it checkably
+     foreign, just using a preposition the rules hadn't anticipated
+     ("village **de** Belgique", "commune **du** Sénégal", "lac **au**
+     Mali"). Matching the country *name* itself, regardless of preposition
+     or gender, fixed it (16% inconnu after, down from 48%). If "étranger"
+     still undercounts after a run, this is usually why — check for a
+     missing country name before adding more adjectives.
+   - Short country names risk false-positive substring matches inside
+     unrelated words -- confirmed for real in this data: "type d'**indi**ce"
+     and "premier stade de la vie d'un **indi**vidu" both contain "inde".
+     `\b`-guard any short/risky entry (safe for these specific ones: all
+     plain ASCII, no accent-adjacency issue). Long names (allemagne,
+     espagne, …) are left as plain substrings — not worth the same treatment,
+     collision risk is negligible.
+
 3. **Serve the review UI**:
    ```
    node .claude/skills/collection-cleanup/scripts/serve-review.mjs [port]
@@ -97,7 +120,11 @@ or `npm run login` first if none exists. The build has to be current:
    and stop — this is a long-running process; launch it in the background and
    don't block waiting on it. The page:
    - reads `data/collection-grouped.json` (never touches the live site itself);
-   - lets the user browse by rarity → theme, search, and multi-select cards;
+   - lets the user browse by rarity → theme, filter by origin and/or search
+     text, and multi-select cards. "Select all" within a theme only selects
+     cards currently passing the filters, not the whole theme — otherwise
+     filtering to "Étranger" and clicking it would silently also select the
+     French cards the filter is hiding, defeating the point of the filter;
    - on "Discard", shows the exact count and requires typing it to confirm,
      then POSTs `{ row_ids: [...] }` to this server's `/api/discard`, which
      is the only thing in this whole skill that calls the real endpoint.
@@ -113,6 +140,7 @@ or `npm run login` first if none exists. The build has to be current:
 scripts/
   fetch-collection.mjs   read-only pagination of /api/my-collection
   classify-theme.mjs     the rule-based theme classifier (tune this)
+  classify-origin.mjs    france / etranger / inconnu classifier (tune this)
   build-grouped.mjs      raw collection -> grouped JSON
   serve-review.mjs       local server: static UI + /api/collection + /api/discard
 public/
