@@ -268,21 +268,15 @@ function openConfirmModal() {
       <p class="warn">Cette action est IRRÉVERSIBLE. Ces cartes seront définitivement retirées de votre collection.</p>
       ${!hasConfirmedBefore ? '<p><strong>Première utilisation :</strong> il est recommandé de tester avec UNE seule carte de faible valeur avant une défausse en masse, pour confirmer que tout fonctionne comme attendu.</p>' : ''}
       <p>${sample}${more}</p>
-      <p>Tapez <strong>${cards.length}</strong> ci-dessous pour confirmer :</p>
-      <input type="text" id="confirm-input" autocomplete="off" placeholder="${cards.length}" />
       <div class="actions">
         <button id="btn-cancel">Annuler</button>
-        <button class="danger" id="btn-confirm" disabled>Défausser définitivement</button>
+        <button class="danger" id="btn-confirm">Défausser définitivement</button>
       </div>
     </div>
   `;
   document.body.appendChild(backdrop);
 
-  const $input = backdrop.querySelector('#confirm-input');
   const $confirm = backdrop.querySelector('#btn-confirm');
-  $input.addEventListener('input', () => {
-    $confirm.disabled = $input.value.trim() !== String(cards.length);
-  });
   backdrop.querySelector('#btn-cancel').addEventListener('click', () => backdrop.remove());
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
 
