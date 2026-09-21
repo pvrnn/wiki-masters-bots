@@ -143,11 +143,21 @@ function renderCard(card) {
     ? `<img src="${card.image_url}" loading="lazy" alt="" />`
     : `<span class="noimg">pas d'image</span>`;
 
-  const originBadge = ORIGIN_BADGE[card.origin];
+  // A bare emoji floating over the thumbnail was easy to miss and, worse,
+  // easy to confuse with the photo itself when the card's own image is a
+  // flag (municipality/country flags are common in Géographie). Origin is
+  // now a labelled chip in the info panel instead -- part of the data
+  // reading, not overlaid on the picture.
+  const originTag =
+    card.origin === 'france'
+      ? '<span class="origin-tag france">🇫🇷 France</span>'
+      : card.origin === 'etranger'
+        ? '<span class="origin-tag etranger">🌍 Étranger</span>'
+        : '';
+
   el.innerHTML = `
     <div class="check">✓</div>
     ${card.starred ? '<div class="starred">★</div>' : ''}
-    ${originBadge ? `<div class="origin-badge" title="${card.origin === 'france' ? 'France' : 'Étranger'}">${originBadge}</div>` : ''}
     <div class="thumb">${img}</div>
     <div class="info">
       <p class="title" title="${escapeAttr(card.title)}">${escapeHtml(card.title)}</p>
@@ -155,6 +165,7 @@ function renderCard(card) {
         <span>ATK ${card.atk ?? '?'}</span>
         <span>DEF ${card.def ?? '?'}</span>
       </div>
+      ${originTag}
     </div>
   `;
   el.addEventListener('click', () => toggleCard(card.row_id, el));
