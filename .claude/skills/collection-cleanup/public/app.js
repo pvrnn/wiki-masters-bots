@@ -143,11 +143,21 @@ function renderCard(card) {
     ? `<img src="${card.image_url}" loading="lazy" alt="" />`
     : `<span class="noimg">pas d'image</span>`;
 
-  const originBadge = ORIGIN_BADGE[card.origin];
+  // A bare emoji floating over the thumbnail was easy to miss and, worse,
+  // easy to confuse with the photo itself when the card's own image is a
+  // flag (municipality/country flags are common in Géographie). Origin is
+  // now a labelled chip in the info panel instead -- part of the data
+  // reading, not overlaid on the picture.
+  const originTag =
+    card.origin === 'france'
+      ? '<span class="origin-tag france">🇫🇷 France</span>'
+      : card.origin === 'etranger'
+        ? '<span class="origin-tag etranger">🌍 Étranger</span>'
+        : '';
+
   el.innerHTML = `
     <div class="check">✓</div>
     ${card.starred ? '<div class="starred">★</div>' : ''}
-    ${originBadge ? `<div class="origin-badge" title="${card.origin === 'france' ? 'France' : 'Étranger'}">${originBadge}</div>` : ''}
     <div class="thumb">${img}</div>
     <div class="info">
       <p class="title" title="${escapeAttr(card.title)}">${escapeHtml(card.title)}</p>
@@ -155,6 +165,7 @@ function renderCard(card) {
         <span>ATK ${card.atk ?? '?'}</span>
         <span>DEF ${card.def ?? '?'}</span>
       </div>
+      ${originTag}
     </div>
   `;
   el.addEventListener('click', () => toggleCard(card.row_id, el));
@@ -257,21 +268,15 @@ function openConfirmModal() {
       <p class="warn">Cette action est IRRÉVERSIBLE. Ces cartes seront définitivement retirées de votre collection.</p>
       ${!hasConfirmedBefore ? '<p><strong>Première utilisation :</strong> il est recommandé de tester avec UNE seule carte de faible valeur avant une défausse en masse, pour confirmer que tout fonctionne comme attendu.</p>' : ''}
       <p>${sample}${more}</p>
-      <p>Tapez <strong>${cards.length}</strong> ci-dessous pour confirmer :</p>
-      <input type="text" id="confirm-input" autocomplete="off" placeholder="${cards.length}" />
       <div class="actions">
         <button id="btn-cancel">Annuler</button>
-        <button class="danger" id="btn-confirm" disabled>Défausser définitivement</button>
+        <button class="danger" id="btn-confirm">Défausser définitivement</button>
       </div>
     </div>
   `;
   document.body.appendChild(backdrop);
 
-  const $input = backdrop.querySelector('#confirm-input');
   const $confirm = backdrop.querySelector('#btn-confirm');
-  $input.addEventListener('input', () => {
-    $confirm.disabled = $input.value.trim() !== String(cards.length);
-  });
   backdrop.querySelector('#btn-cancel').addEventListener('click', () => backdrop.remove());
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) backdrop.remove(); });
 

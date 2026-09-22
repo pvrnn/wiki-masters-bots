@@ -8,12 +8,38 @@
 
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { classifyTheme } from './classify-theme.mjs';
+import { classifyTheme, THEMES, FALLBACK_THEME } from './classify-theme.mjs';
 import { classifyOrigin } from './classify-origin.mjs';
 
 const REPO_ROOT = resolve(new URL('../../../../', import.meta.url).pathname);
 const rawPath = resolve(REPO_ROOT, 'data/collection-raw.json');
 const outPath = resolve(REPO_ROOT, 'data/collection-grouped.json');
+const lookupPath = resolve(REPO_ROOT, '.claude/skills/collection-cleanup/category-lookup.json');
+
+// key -> label, so a lookup hit (which only stores the key, to stay a plain
+// flat JSON file) can still produce the {key, label} pair classifyTheme
+// returns.
+const THEME_LABEL = new Map([...THEMES, FALLBACK_THEME].map((t) => [t.key, t.label]));
+
+/**
+ * Direct, agent-curated classifications ("The Residents are American",
+ * "Yannick Noah is French") for exactly the categories the regex
+ * classifiers cannot place -- things no keyword list can know without
+ * external knowledge. Checked FIRST; classify-theme.mjs/classify-origin.mjs
+ * are the fallback for anything not in here yet (new categories from future
+ * pulls, or ones not worth a person's time to look up).
+ *
+ * Committed to the repo (unlike data/*.json): these are facts about the
+ * world, not personal collection data, and are exactly as reusable for
+ * anyone else's wiki-masters collection as the regex rules are.
+ */
+let lookup = {};
+try {
+  lookup = JSON.parse(readFileSync(lookupPath, 'utf8'));
+} catch {
+  // Missing/corrupt lookup file is not fatal -- everything just falls back
+  // to the regex classifiers, same as before this existed.
+}
 
 let raw;
 try {
@@ -42,11 +68,30 @@ function rankOf(rarity) {
 const buckets = new Map();
 const originCounts = { france: 0, etranger: 0, inconnu: 0 };
 
+let lookupHits = 0;
+
 for (const item of raw.collection) {
   const card = item.card ?? {};
   const rarity = card.rarity ?? '?';
-  const theme = classifyTheme(card.category, card.wikipedia_title);
-  const origin = classifyOrigin(card.category, card.wikipedia_title);
+
+  // Same key resolution classifyTheme/classifyOrigin use internally
+  // (category, falling back to title when category is null), so a lookup
+  // entry lines up with whichever text the regex path would have matched
+  // against too.
+  const lookupKey = card.category?.trim() || card.wikipedia_title?.trim();
+  const hit = lookupKey ? lookup[lookupKey] : undefined;
+
+  let theme;
+  let origin;
+  if (hit) {
+    lookupHits += 1;
+    const [themeKey, hitOrigin] = hit;
+    theme = { key: themeKey, label: THEME_LABEL.get(themeKey) ?? themeKey };
+    origin = hitOrigin;
+  } else {
+    theme = classifyTheme(card.category, card.wikipedia_title);
+    origin = classifyOrigin(card.category, card.wikipedia_title);
+  }
   originCounts[origin] += 1;
 
   if (!buckets.has(rarity)) buckets.set(rarity, new Map());
@@ -121,6 +166,7 @@ writeFileSync(
 );
 
 console.log(`Wrote ${outPath}`);
+console.log(`Lookup table: ${lookupHits}/${total} cards classified from category-lookup.json (${Object.keys(lookup).length} entries known)`);
 console.log(`${total} cards across ${groups.length} rarity tiers.`);
 for (const g of groups) {
   console.log(`  ${g.rarity.padEnd(3)} ${String(g.count).padStart(4)} cards, ${g.themes.length} themes`);

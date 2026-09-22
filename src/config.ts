@@ -45,7 +45,8 @@ export type Config = {
   timezone: string;
   headless: boolean;
 
-  intervalMinutes: number;
+  intervalMinMinutes: number;
+  intervalMaxMinutes: number;
 
   openDelayMinMs: number;
   openDelayMaxMs: number;
@@ -108,12 +109,23 @@ export function loadConfig(): Config {
     );
   }
 
-  const intervalMinutes = num('WM_INTERVAL_MINUTES', 30, 1, 10_080);
-  const runBudgetMs = num('WM_RUN_BUDGET_MS', 1_500_000, 10_000, 86_400_000);
-  if (runBudgetMs >= intervalMinutes * 60_000) {
+  // A jittered range, not a fixed period: a machine-exact cadence is one of
+  // the more obvious automation tells, and there's no reason to wait a full
+  // fixed interval when packs can appear at any point within it anyway.
+  const intervalMinMinutes = num('WM_INTERVAL_MIN_MINUTES', 10, 1, 10_080);
+  const intervalMaxMinutes = num('WM_INTERVAL_MAX_MINUTES', 15, 1, 10_080);
+  if (intervalMaxMinutes < intervalMinMinutes) {
     throw new ConfigError(
-      `WM_RUN_BUDGET_MS (${runBudgetMs}) must be less than the schedule interval ` +
-        `(${intervalMinutes} min = ${intervalMinutes * 60_000} ms), or runs will overlap`,
+      `WM_INTERVAL_MAX_MINUTES (${intervalMaxMinutes}) must be >= ` +
+        `WM_INTERVAL_MIN_MINUTES (${intervalMinMinutes})`,
+    );
+  }
+  const runBudgetMs = num('WM_RUN_BUDGET_MS', 420_000, 10_000, 86_400_000);
+  if (runBudgetMs >= intervalMinMinutes * 60_000) {
+    throw new ConfigError(
+      `WM_RUN_BUDGET_MS (${runBudgetMs}) must be less than the shortest possible ` +
+        `schedule interval (WM_INTERVAL_MIN_MINUTES = ${intervalMinMinutes} min = ` +
+        `${intervalMinMinutes * 60_000} ms), or a run could still be going when the next one fires`,
     );
   }
 
@@ -166,7 +178,8 @@ export function loadConfig(): Config {
     timezone: str('WM_TIMEZONE', 'Europe/Paris'),
     headless: bool('WM_HEADLESS', false),
 
-    intervalMinutes,
+    intervalMinMinutes,
+    intervalMaxMinutes,
 
     openDelayMinMs,
     openDelayMaxMs,
