@@ -140,6 +140,11 @@ or `npm run login` first if none exists. The build has to be current:
      espagne, …) are left as plain substrings — not worth the same treatment,
      collision risk is negligible.
 
+   **Optional, before this step: AI classification with Laya** (see "Laya
+   classification" below). When `data/collection-ai.json` exists, this step
+   also uses it to fill theme gaps and to give each card a real country.
+   Either way, it computes a `keep_score` for every card.
+
 3. **Serve the review UI**:
    ```
    node .claude/skills/collection-cleanup/scripts/serve-review.mjs [port]
@@ -153,6 +158,11 @@ or `npm run login` first if none exists. The build has to be current:
      cards currently passing the filters, not the whole theme — otherwise
      filtering to "Étranger" and clicking it would silently also select the
      French cards the filter is hiding, defeating the point of the filter;
+   - shows each card's keep score (red < 30, amber < 60, green, with a ×2
+     mark on extra copies; the tooltip has the breakdown), lets the user
+     filter by country, sort each theme by keep score, and **select** every
+     visible card under a score threshold. Selecting is all that does:
+     discarding still goes through the button and its modal;
    - on "Discard", shows the exact count and requires typing it to confirm,
      then POSTs `{ row_ids: [...] }` to this server's `/api/discard`, which
      is the only thing in this whole skill that calls the real endpoint.
@@ -162,15 +172,106 @@ or `npm run login` first if none exists. The build has to be current:
    treating any 200 as success — see "The id field" below for why that
    distinction is load-bearing, not defensive-programming paranoia.
 
+## Laya classification (optional AI layer)
+
+`scripts/classify-laya.py` runs [Laya](https://huggingface.co/convaiinnovations/laya)
+(Apache-2.0, `laya` on PyPI), a local model that answers typed questions about a
+text in one forward pass. It uses the `multilingual` checkpoint, since the
+categories are in French. It costs nothing to run, needs no API key, works on
+CPU, and never talks to wiki-masters.com.
+
+**Setup, once, from the repo root:**
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install laya        # pulls in torch: ~1 GB or more
+```
+**Run it** between steps 1 and 2 (`refresh-collection` does this automatically
+when `.venv/` exists):
+```
+.venv/bin/python .claude/skills/collection-cleanup/scripts/classify-laya.py [--limit N] [--force] [--no-wiki] [--dry-run]
+```
+The first run downloads the checkpoint from Hugging Face and fetches each
+card's Wikipedia intro. Both are cached, the intros in
+`data/wiki-extracts.json`. After that, only new cards are classified. Every
+card is re-classified when the questions change: when `countries.json`,
+the THEMES list or `notes` in the preferences changes.
+
+For each distinct card it writes `data/collection-ai.json`:
+- `theme`: one of `classify-theme.mjs`'s THEMES keys (read from that file,
+  so the two can't drift apart).
+- `country`: an ISO code from `countries.json`, or `INT` / `NONE`. It is
+  asked in three steps: continent (7 options), then subregion (5 or fewer),
+  then country (19 or fewer).
+- `interest`: 0–100, for how well-known the subject is.
+
+Each answer carries Laya's calibrated `answer_confidence`.
+
+**Why it is built this way.** These are Laya's own documented limits
+("Honest limits" in its README). Keep them in mind before "simplifying" it:
+- It's a 322M-parameter encoder with **no world knowledge**. It picks the
+  option the text supports best. The category "groupe de musique" alone
+  doesn't say which country, so the script adds the first paragraph of the
+  Wikipedia article to each card's text, which usually says it outright.
+  `--no-wiki` skips that, with noticeably weaker country answers.
+- **Accuracy falls off sharply past ~20 options** in one choice question,
+  and there are ~200 countries. Hence the continent → subregion → country
+  hierarchy in `countries.json`, with no level over 20. Keep it that way
+  when adding countries. `FR` appears in several subregions on purpose, so
+  overseas territories resolve to France.
+- **`score` is its weakest question type**, and the multilingual checkpoint
+  has a position bias on it. So "interest" is a 3-option A/B/C choice, and
+  only one part of the keep score.
+- It is **weak zero-shot and ships over-confident**, so its answers only
+  fill gaps (below).
+
+**How `build-grouped.mjs` uses it:**
+- *Theme*: `category-lookup.json` first, then a regex hit, then Laya
+  (only if `theme_conf ≥ 0.6`), then "Autres". Laya only rescues cards that
+  would otherwise be unclassified.
+- *Country*:
+  - If the lookup or regex says `france`, the country is FR, whatever
+    Laya says.
+  - Otherwise, a country named in the category text wins ("ville de
+    Norvège" → NO). This uses Unicode-aware boundaries, so "roman" doesn't
+    match Oman.
+  - Otherwise, Laya's answer is used if `country_conf ≥ 0.4` (the
+    probability of the whole continent → subregion → country path). It is
+    dropped if it contradicts a regex `etranger`.
+  - `origin` is derived from the country, so the France/Étranger filter
+    still works.
+- Both thresholds are constants at the top of `build-grouped.mjs`. Tune
+  them against a hand spot-check of ~30 cards, not by feel.
+
+**Keep score (0–100)** is computed in `build-grouped.mjs`, not in the Python
+script, so the weights can be changed and re-applied in a second. It is a
+weighted mean of three parts:
+- `stats`: rarity, plus q_score, pageviews and atk+def as percentiles of
+  the collection.
+- `ai`: Laya's interest answer.
+- `prefs`: favourite and disliked themes and countries.
+
+A part with no data drops out and the others are re-weighted, so the score
+works without Laya and without preferences. Every extra copy of a card
+you already own is multiplied by `duplicateFactor` (0.3 by default), and a
+starred card is always 100.
+
+**Preferences**: copy `preferences.example.json` to
+`data/keep-preferences.json` (personal, gitignored) and fill in theme keys,
+ISO country codes, weights and free-text `notes`. The notes are passed to
+Laya's interest question.
+
 ## Files
 
 ```
 category-lookup.json     agent-curated {theme, origin} per category (extend this first)
+countries.json           continent -> subregion -> country hierarchy (<= 20 options per level) for Laya
+preferences.example.json template for data/keep-preferences.json (keep-score preferences)
 scripts/
   fetch-collection.mjs   read-only pagination of /api/my-collection
   classify-theme.mjs     the regex theme classifier -- fallback for what's not in the lookup
   classify-origin.mjs    the regex france/etranger/inconnu classifier -- same fallback role
-  build-grouped.mjs      raw collection -> grouped JSON (checks the lookup, then the regexes)
+  classify-laya.py       optional local-AI pass: theme, country, interest -> data/collection-ai.json
+  build-grouped.mjs      raw collection -> grouped JSON (lookup, regexes, then Laya) + keep scores
   serve-review.mjs       local server: static UI + /api/collection + /api/discard
 public/
   index.html, app.js, style.css   the review UI (vanilla JS, no build step)
@@ -181,7 +282,9 @@ regardless of the caller's cwd, but are meant to be run from the repo root (as
 shown above) so relative paths in their own error messages stay meaningful.
 
 `data/collection-raw.json`, `data/collection-sync-state.json`,
-`data/collection-categories.json`, `data/collection-grouped.json`, and
+`data/collection-categories.json`, `data/collection-grouped.json`,
+`data/collection-ai.json`, `data/wiki-extracts.json`,
+`data/keep-preferences.json`, and
 `data/discard-audit.log` (one JSON line per discard call: requested ids,
 outcome, response) all land under `data/`, which is already gitignored —
 this is personal collection data, never commit it.
