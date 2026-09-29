@@ -20,11 +20,17 @@ const state = {
   selected: new Set(),
   query: '',
   originFilter: 'tous',
+  countryFilter: 'tous',
+  sort: 'q_score',
 };
 
 const $main = document.getElementById('main');
 const $search = document.getElementById('search');
 const $originFilter = document.getElementById('origin-filter');
+const $countryFilter = document.getElementById('country-filter');
+const $sortOrder = document.getElementById('sort-order');
+const $threshold = document.getElementById('threshold');
+const $btnSelectBelow = document.getElementById('btn-select-below');
 const $statTotal = document.getElementById('stat-total');
 const $selBar = document.getElementById('selection-bar');
 const $selCount = document.getElementById('selection-count');
@@ -53,11 +59,37 @@ async function loadCollection() {
       for (const c of t.cards) state.byId.set(c.row_id, c);
     }
   }
+  populateCountryFilter();
   render();
+}
+
+/** Only countries actually present, most common first -- 200 empty options would bury them. */
+function populateCountryFilter() {
+  const counts = new Map();
+  for (const c of state.byId.values()) {
+    if (c.country) counts.set(c.country, { label: c.country_label ?? c.country, n: (counts.get(c.country)?.n ?? 0) + 1 });
+  }
+  const previous = $countryFilter.value;
+  $countryFilter.innerHTML = '<option value="tous">Tous pays</option><option value="__none">Pays inconnu</option>';
+  for (const [code, { label, n }] of [...counts.entries()].sort((a, b) => b[1].n - a[1].n)) {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = `${label} (${n})`;
+    $countryFilter.appendChild(opt);
+  }
+  $countryFilter.value = [...$countryFilter.options].some((o) => o.value === previous) ? previous : 'tous';
+}
+
+function sortedCards(cards) {
+  if (state.sort === 'q_score') return cards; // build-grouped.mjs's own order
+  const dir = state.sort === 'keep_asc' ? 1 : -1;
+  return [...cards].sort((a, b) => dir * ((a.keep_score ?? 50) - (b.keep_score ?? 50)));
 }
 
 function cardMatchesFilters(card) {
   if (state.originFilter !== 'tous' && card.origin !== state.originFilter) return false;
+  if (state.countryFilter === '__none' && card.country) return false;
+  if (state.countryFilter !== 'tous' && state.countryFilter !== '__none' && card.country !== state.countryFilter) return false;
   if (!state.query) return true;
   const hay = normalize(`${card.title} ${card.category ?? ''}`);
   return hay.includes(state.query);
@@ -119,7 +151,7 @@ function render() {
 
       const grid = document.createElement('div');
       grid.className = 'card-grid';
-      for (const card of theme.cards) {
+      for (const card of sortedCards(theme.cards)) {
         grid.appendChild(renderCard(card));
       }
       themeEl.appendChild(grid);
@@ -154,10 +186,16 @@ function renderCard(card) {
       : card.origin === 'etranger'
         ? '<span class="origin-tag etranger">🌍 Étranger</span>'
         : '';
+  // With a known country, name it instead of the generic "Étranger".
+  const countryTag =
+    card.country && card.origin !== 'france'
+      ? `<span class="origin-tag etranger" title="${escapeAttr(countryTitle(card))}">🌍 ${escapeHtml(card.country_label ?? card.country)}</span>`
+      : '';
 
   el.innerHTML = `
     <div class="check">✓</div>
     ${card.starred ? '<div class="starred">★</div>' : ''}
+    ${keepBadge(card)}
     <div class="thumb">${img}</div>
     <div class="info">
       <p class="title" title="${escapeAttr(card.title)}">${escapeHtml(card.title)}</p>
@@ -165,11 +203,35 @@ function renderCard(card) {
         <span>ATK ${card.atk ?? '?'}</span>
         <span>DEF ${card.def ?? '?'}</span>
       </div>
-      ${originTag}
+      ${countryTag || originTag}
     </div>
   `;
   el.addEventListener('click', () => toggleCard(card.row_id, el));
   return el;
+}
+
+function keepBadge(card) {
+  if (typeof card.keep_score !== 'number') return '';
+  const level = card.keep_score < 30 ? 'low' : card.keep_score < 60 ? 'mid' : 'high';
+  const b = card.keep_breakdown ?? {};
+  const part = (label, v) => `${label} ${v ?? '—'}`;
+  const title = [
+    `Score de conservation : ${card.keep_score}/100`,
+    part('stats', b.stats),
+    part('intérêt IA', b.ai),
+    part('préférences', b.prefs),
+    b.duplicate ? 'doublon : une autre copie est mieux notée' : null,
+    card.starred ? 'favorite : toujours 100' : null,
+  ]
+    .filter(Boolean)
+    .join('\n');
+  return `<div class="keep-badge ${level}${b.duplicate ? ' dup' : ''}" title="${escapeAttr(title)}">${card.keep_score}</div>`;
+}
+
+function countryTitle(card) {
+  return typeof card.country_conf === 'number' && card.country_conf < 1
+    ? `Pays estimé par l'IA (confiance ${Math.round(card.country_conf * 100)} %)`
+    : 'Pays lu dans la catégorie';
 }
 
 function escapeHtml(s) {
@@ -207,6 +269,25 @@ function toggleThemeSelection(theme) {
   render();
 }
 
+/**
+ * Selects (never discards) every card passing the current filters whose keep
+ * score is under the threshold. Starred cards score 100, so they can't be
+ * caught by this. Discarding still goes through the button and its modal.
+ */
+function selectBelowThreshold() {
+  const limit = Number($threshold.value);
+  if (!Number.isFinite(limit)) return;
+  let added = 0;
+  for (const card of state.byId.values()) {
+    if (typeof card.keep_score !== 'number' || card.keep_score >= limit || !cardMatchesFilters(card)) continue;
+    if (!state.selected.has(card.row_id)) added += 1;
+    state.selected.add(card.row_id);
+  }
+  render();
+  updateSelectionBar();
+  showToast(`${added} carte(s) ajoutée(s) à la sélection (score < ${limit}).`, 'ok');
+}
+
 function updateSelectionBar() {
   const n = state.selected.size;
   $selBar.style.display = n > 0 ? 'flex' : 'none';
@@ -217,6 +298,7 @@ function updateSelectionBar() {
 function applyFilter() {
   state.query = normalize($search.value.trim());
   state.originFilter = $originFilter.value;
+  state.countryFilter = $countryFilter.value;
   for (const el of document.querySelectorAll('.card')) {
     const card = state.byId.get(el.dataset.rowId);
     el.classList.toggle('hidden', card ? !cardMatchesFilters(card) : true);
@@ -235,6 +317,12 @@ function applyFilter() {
 
 $search.addEventListener('input', applyFilter);
 $originFilter.addEventListener('change', applyFilter);
+$countryFilter.addEventListener('change', applyFilter);
+$sortOrder.addEventListener('change', () => {
+  state.sort = $sortOrder.value;
+  render();
+});
+$btnSelectBelow.addEventListener('click', selectBelowThreshold);
 $btnReload.addEventListener('click', loadCollection);
 $btnClear.addEventListener('click', () => {
   state.selected.clear();

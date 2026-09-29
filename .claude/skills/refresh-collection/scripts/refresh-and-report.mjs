@@ -26,10 +26,14 @@ function previousTotal() {
   }
 }
 
+// The optional Laya step (collection-cleanup's classify-laya.py) runs only
+// if the repo-local venv exists -- see that skill's SKILL.md for setup.
+const VENV_PYTHON = [resolve(REPO_ROOT, '.venv/bin/python'), resolve(REPO_ROOT, '.venv/Scripts/python.exe')].find(existsSync);
+
 /** Runs a child script to completion and returns its combined stdout+stderr text. */
-function runToCompletion(scriptPath, args = []) {
+function runToCompletion(scriptPath, args = [], command = 'node') {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn('node', [scriptPath, ...args], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(command, [scriptPath, ...args], { cwd: REPO_ROOT, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '';
     child.stdout.on('data', (c) => { output += c; });
     child.stderr.on('data', (c) => { output += c; });
@@ -86,6 +90,18 @@ const fetchOutput = await runToCompletion(resolve(CLEANUP_SCRIPTS, 'fetch-collec
 const fetchMeta = extractLoggerMeta(fetchOutput, 'wrote raw collection');
 const totalCards = fetchMeta?.cards;
 
+let layaNote;
+if (VENV_PYTHON) {
+  console.log('Classification IA (Laya)…');
+  try {
+    const layaOutput = await runToCompletion(resolve(CLEANUP_SCRIPTS, 'classify-laya.py'), [], VENV_PYTHON);
+    layaNote = /(\d+) cartes classées/.exec(layaOutput)?.[0] ?? 'aucune nouvelle carte';
+  } catch (error) {
+    // Not fatal: build-grouped.mjs falls back to the lookup + regex path.
+    layaNote = `échec, classement sans IA -- ${error.message.split('\n').slice(-2).join(' ').trim()}`;
+  }
+}
+
 console.log('Classification par thème…');
 const buildOutput = await runToCompletion(resolve(CLEANUP_SCRIPTS, 'build-grouped.mjs'));
 const autresMatch = /Autres \/ non class[ée]": (\d+) cards \(([\d.]+)%\)/.exec(buildOutput);
@@ -105,6 +121,7 @@ if (typeof totalCards === 'number') {
 if (autresCount !== undefined) {
   console.log(`Non classées ("Autres") : ${autresCount} (${autresPct}%)`);
 }
+if (layaNote) console.log(`IA (Laya) : ${layaNote}`);
 if (server.started && !server.notConfirmed) {
   console.log(`Serveur : démarré -> http://127.0.0.1:${PORT}`);
 } else if (server.started && server.notConfirmed) {

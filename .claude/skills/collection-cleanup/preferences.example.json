@@ -1,0 +1,10 @@
+{
+  "_comment": "Copy to data/keep-preferences.json (gitignored -- it's personal) and edit. Theme keys are the ones in classify-theme.mjs (sport, cinema-tv, geographie, ...); countries are ISO codes from countries.json (FR, JP, US, ...). 'notes' is free French text passed to Laya's interest question -- changing it makes classify-laya.py re-ask that question for every card. 'weights' are relative, they don't need to sum to 100. 'duplicateFactor' multiplies the keep score of every extra copy of a card you already own.",
+  "favoriteThemes": [],
+  "dislikedThemes": [],
+  "favoriteCountries": [],
+  "dislikedCountries": [],
+  "notes": "",
+  "weights": { "stats": 45, "ai": 25, "prefs": 30 },
+  "duplicateFactor": 0.3
+}

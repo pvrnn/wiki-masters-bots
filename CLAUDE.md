@@ -103,7 +103,14 @@ rather than anchor on it), `build-grouped.mjs` produces the rarity→theme→car
 `serve-review.mjs` is a zero-dependency `node:http` server (127.0.0.1-only) that serves
 the static UI and is the *only* thing in the whole skill allowed to call
 `bulk-discard` — a rule stated explicitly in that skill's `SKILL.md` because the call is
-irreversible. Discards prune **both** `data/collection-raw.json` and
+irreversible. An optional local-AI layer, `classify-laya.py` (Python, the `laya` package
+in a gitignored repo-local `.venv/`; the only Python in the repo), adds a theme,
+a real country and an interest score per card. `build-grouped.mjs` uses those
+only to fill gaps the lookup and regexes leave, and to compute each card's
+`keep_score`. Laya is a small encoder with no world knowledge that degrades
+past ~20 options per question, which is why it gets Wikipedia intros and a
+continent→subregion→country hierarchy; see that skill's SKILL.md before
+changing it. Discards prune **both** `data/collection-raw.json` and
 `data/collection-grouped.json` on success; raw has to stay pruned too because incremental
 fetch merges new cards on top of it rather than replacing it wholesale.
 

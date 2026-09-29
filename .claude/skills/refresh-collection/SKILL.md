@@ -20,6 +20,11 @@ Run from the repo root. Relay its printed summary as-is: card count (with the
 delta from before, when known), how many landed in the "Autres" catch-all
 theme, and whether the review server was already running or just got started.
 
+If the repo has a `.venv/` (the Laya setup in `collection-cleanup`'s
+SKILL.md), it also runs `classify-laya.py` between the fetch and the build and
+reports how many cards it classified. If that step fails, the summary says so,
+and the build falls back to classifying without AI rather than aborting.
+
 This calls into `collection-cleanup`'s own scripts (`fetch-collection.mjs`,
 `build-grouped.mjs`, `serve-review.mjs`) rather than duplicating their logic
 — this skill is purely the "do all three, in order, and tell me the result"

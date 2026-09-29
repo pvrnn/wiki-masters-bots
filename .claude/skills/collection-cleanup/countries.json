@@ -1,0 +1,1206 @@
+{
+ "_comment": "Continent -> subregion -> country hierarchy for classify-laya.py. Every level is kept at <= 20 options, because Laya's accuracy falls off sharply past ~20 options per choice question (see SKILL.md). 'FR' appears in several subregions on purpose: French overseas territories must resolve to France. SU/YU/CS are historical states Wikipedia cards often belong to.",
+ "noCountry": {
+  "international": "sujet international ou qui concerne plusieurs pays",
+  "aucun": "sujet sans pays : espèce, concept abstrait, date, objet astronomique…"
+ },
+ "continents": [
+  {
+   "key": "europe",
+   "label": "Europe",
+   "hint": "pays européens, y compris la Russie",
+   "subregions": [
+    {
+     "key": "europe-ouest",
+     "label": "Europe de l'Ouest",
+     "hint": "France, Benelux, Allemagne, Autriche, Suisse",
+     "countries": [
+      [
+       "FR",
+       "France"
+      ],
+      [
+       "BE",
+       "Belgique"
+      ],
+      [
+       "NL",
+       "Pays-Bas"
+      ],
+      [
+       "LU",
+       "Luxembourg"
+      ],
+      [
+       "DE",
+       "Allemagne"
+      ],
+      [
+       "AT",
+       "Autriche"
+      ],
+      [
+       "CH",
+       "Suisse"
+      ],
+      [
+       "LI",
+       "Liechtenstein"
+      ],
+      [
+       "MC",
+       "Monaco"
+      ]
+     ]
+    },
+    {
+     "key": "europe-nord",
+     "label": "Europe du Nord",
+     "hint": "îles Britanniques, pays nordiques et baltes",
+     "countries": [
+      [
+       "GB",
+       "Royaume-Uni (Angleterre, Écosse, pays de Galles, Irlande du Nord)"
+      ],
+      [
+       "IE",
+       "Irlande"
+      ],
+      [
+       "IS",
+       "Islande"
+      ],
+      [
+       "NO",
+       "Norvège"
+      ],
+      [
+       "SE",
+       "Suède"
+      ],
+      [
+       "FI",
+       "Finlande"
+      ],
+      [
+       "DK",
+       "Danemark"
+      ],
+      [
+       "EE",
+       "Estonie"
+      ],
+      [
+       "LV",
+       "Lettonie"
+      ],
+      [
+       "LT",
+       "Lituanie"
+      ]
+     ]
+    },
+    {
+     "key": "europe-sud",
+     "label": "Europe du Sud",
+     "hint": "péninsules ibérique, italienne et balkanique",
+     "countries": [
+      [
+       "ES",
+       "Espagne"
+      ],
+      [
+       "PT",
+       "Portugal"
+      ],
+      [
+       "IT",
+       "Italie"
+      ],
+      [
+       "MT",
+       "Malte"
+      ],
+      [
+       "SM",
+       "Saint-Marin"
+      ],
+      [
+       "VA",
+       "Vatican"
+      ],
+      [
+       "AD",
+       "Andorre"
+      ],
+      [
+       "GR",
+       "Grèce"
+      ],
+      [
+       "CY",
+       "Chypre"
+      ],
+      [
+       "SI",
+       "Slovénie"
+      ],
+      [
+       "HR",
+       "Croatie"
+      ],
+      [
+       "BA",
+       "Bosnie-Herzégovine"
+      ],
+      [
+       "RS",
+       "Serbie"
+      ],
+      [
+       "ME",
+       "Monténégro"
+      ],
+      [
+       "MK",
+       "Macédoine du Nord"
+      ],
+      [
+       "AL",
+       "Albanie"
+      ],
+      [
+       "XK",
+       "Kosovo"
+      ],
+      [
+       "YU",
+       "Yougoslavie (historique)"
+      ]
+     ]
+    },
+    {
+     "key": "europe-est",
+     "label": "Europe de l'Est",
+     "hint": "Europe centrale et orientale, Russie",
+     "countries": [
+      [
+       "PL",
+       "Pologne"
+      ],
+      [
+       "CZ",
+       "Tchéquie"
+      ],
+      [
+       "SK",
+       "Slovaquie"
+      ],
+      [
+       "HU",
+       "Hongrie"
+      ],
+      [
+       "RO",
+       "Roumanie"
+      ],
+      [
+       "BG",
+       "Bulgarie"
+      ],
+      [
+       "MD",
+       "Moldavie"
+      ],
+      [
+       "UA",
+       "Ukraine"
+      ],
+      [
+       "BY",
+       "Biélorussie"
+      ],
+      [
+       "RU",
+       "Russie"
+      ],
+      [
+       "SU",
+       "Union soviétique (URSS, historique)"
+      ],
+      [
+       "CS",
+       "Tchécoslovaquie (historique)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "key": "afrique",
+   "label": "Afrique",
+   "hint": "pays africains",
+   "subregions": [
+    {
+     "key": "afrique-nord",
+     "label": "Afrique du Nord",
+     "hint": "Maghreb, Égypte, Soudan",
+     "countries": [
+      [
+       "DZ",
+       "Algérie"
+      ],
+      [
+       "EG",
+       "Égypte"
+      ],
+      [
+       "LY",
+       "Libye"
+      ],
+      [
+       "MA",
+       "Maroc"
+      ],
+      [
+       "SD",
+       "Soudan"
+      ],
+      [
+       "TN",
+       "Tunisie"
+      ],
+      [
+       "EH",
+       "Sahara occidental"
+      ]
+     ]
+    },
+    {
+     "key": "afrique-ouest",
+     "label": "Afrique de l'Ouest",
+     "hint": "Sénégal, Mali, Côte d'Ivoire, Nigeria…",
+     "countries": [
+      [
+       "BJ",
+       "Bénin"
+      ],
+      [
+       "BF",
+       "Burkina Faso"
+      ],
+      [
+       "CV",
+       "Cap-Vert"
+      ],
+      [
+       "CI",
+       "Côte d'Ivoire"
+      ],
+      [
+       "GM",
+       "Gambie"
+      ],
+      [
+       "GH",
+       "Ghana"
+      ],
+      [
+       "GN",
+       "Guinée"
+      ],
+      [
+       "GW",
+       "Guinée-Bissau"
+      ],
+      [
+       "LR",
+       "Liberia"
+      ],
+      [
+       "ML",
+       "Mali"
+      ],
+      [
+       "MR",
+       "Mauritanie"
+      ],
+      [
+       "NE",
+       "Niger"
+      ],
+      [
+       "NG",
+       "Nigeria"
+      ],
+      [
+       "SN",
+       "Sénégal"
+      ],
+      [
+       "SL",
+       "Sierra Leone"
+      ],
+      [
+       "TG",
+       "Togo"
+      ]
+     ]
+    },
+    {
+     "key": "afrique-centrale",
+     "label": "Afrique centrale",
+     "hint": "Cameroun, Congo, Gabon, Tchad…",
+     "countries": [
+      [
+       "AO",
+       "Angola"
+      ],
+      [
+       "CM",
+       "Cameroun"
+      ],
+      [
+       "CF",
+       "République centrafricaine"
+      ],
+      [
+       "TD",
+       "Tchad"
+      ],
+      [
+       "CG",
+       "République du Congo"
+      ],
+      [
+       "CD",
+       "République démocratique du Congo"
+      ],
+      [
+       "GQ",
+       "Guinée équatoriale"
+      ],
+      [
+       "GA",
+       "Gabon"
+      ],
+      [
+       "ST",
+       "Sao Tomé-et-Principe"
+      ]
+     ]
+    },
+    {
+     "key": "afrique-est",
+     "label": "Afrique de l'Est",
+     "hint": "Corne de l'Afrique, Grands Lacs, océan Indien",
+     "countries": [
+      [
+       "BI",
+       "Burundi"
+      ],
+      [
+       "KM",
+       "Comores"
+      ],
+      [
+       "DJ",
+       "Djibouti"
+      ],
+      [
+       "ER",
+       "Érythrée"
+      ],
+      [
+       "ET",
+       "Éthiopie"
+      ],
+      [
+       "KE",
+       "Kenya"
+      ],
+      [
+       "MG",
+       "Madagascar"
+      ],
+      [
+       "MW",
+       "Malawi"
+      ],
+      [
+       "MU",
+       "Maurice"
+      ],
+      [
+       "MZ",
+       "Mozambique"
+      ],
+      [
+       "RW",
+       "Rwanda"
+      ],
+      [
+       "SC",
+       "Seychelles"
+      ],
+      [
+       "SO",
+       "Somalie"
+      ],
+      [
+       "SS",
+       "Soudan du Sud"
+      ],
+      [
+       "TZ",
+       "Tanzanie"
+      ],
+      [
+       "UG",
+       "Ouganda"
+      ],
+      [
+       "ZM",
+       "Zambie"
+      ],
+      [
+       "ZW",
+       "Zimbabwe"
+      ],
+      [
+       "FR",
+       "La Réunion ou Mayotte (France)"
+      ]
+     ]
+    },
+    {
+     "key": "afrique-australe",
+     "label": "Afrique australe",
+     "hint": "Afrique du Sud et voisins",
+     "countries": [
+      [
+       "ZA",
+       "Afrique du Sud"
+      ],
+      [
+       "BW",
+       "Botswana"
+      ],
+      [
+       "SZ",
+       "Eswatini"
+      ],
+      [
+       "LS",
+       "Lesotho"
+      ],
+      [
+       "NA",
+       "Namibie"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "key": "asie",
+   "label": "Asie",
+   "hint": "pays asiatiques, Moyen-Orient et Caucase",
+   "subregions": [
+    {
+     "key": "asie-est",
+     "label": "Asie de l'Est",
+     "hint": "Chine, Japon, Corées, Mongolie, Taïwan",
+     "countries": [
+      [
+       "CN",
+       "Chine"
+      ],
+      [
+       "JP",
+       "Japon"
+      ],
+      [
+       "KR",
+       "Corée du Sud"
+      ],
+      [
+       "KP",
+       "Corée du Nord"
+      ],
+      [
+       "MN",
+       "Mongolie"
+      ],
+      [
+       "TW",
+       "Taïwan"
+      ]
+     ]
+    },
+    {
+     "key": "asie-sud-est",
+     "label": "Asie du Sud-Est",
+     "hint": "Indochine, Indonésie, Philippines…",
+     "countries": [
+      [
+       "BN",
+       "Brunei"
+      ],
+      [
+       "KH",
+       "Cambodge"
+      ],
+      [
+       "ID",
+       "Indonésie"
+      ],
+      [
+       "LA",
+       "Laos"
+      ],
+      [
+       "MY",
+       "Malaisie"
+      ],
+      [
+       "MM",
+       "Birmanie"
+      ],
+      [
+       "PH",
+       "Philippines"
+      ],
+      [
+       "SG",
+       "Singapour"
+      ],
+      [
+       "TH",
+       "Thaïlande"
+      ],
+      [
+       "TL",
+       "Timor oriental"
+      ],
+      [
+       "VN",
+       "Viêt Nam"
+      ]
+     ]
+    },
+    {
+     "key": "asie-sud",
+     "label": "Asie du Sud",
+     "hint": "Inde, Pakistan, Iran…",
+     "countries": [
+      [
+       "AF",
+       "Afghanistan"
+      ],
+      [
+       "BD",
+       "Bangladesh"
+      ],
+      [
+       "BT",
+       "Bhoutan"
+      ],
+      [
+       "IN",
+       "Inde"
+      ],
+      [
+       "IR",
+       "Iran"
+      ],
+      [
+       "MV",
+       "Maldives"
+      ],
+      [
+       "NP",
+       "Népal"
+      ],
+      [
+       "PK",
+       "Pakistan"
+      ],
+      [
+       "LK",
+       "Sri Lanka"
+      ]
+     ]
+    },
+    {
+     "key": "asie-centrale",
+     "label": "Asie centrale",
+     "hint": "pays en -stan d'Asie centrale",
+     "countries": [
+      [
+       "KZ",
+       "Kazakhstan"
+      ],
+      [
+       "KG",
+       "Kirghizistan"
+      ],
+      [
+       "TJ",
+       "Tadjikistan"
+      ],
+      [
+       "TM",
+       "Turkménistan"
+      ],
+      [
+       "UZ",
+       "Ouzbékistan"
+      ]
+     ]
+    },
+    {
+     "key": "asie-ouest",
+     "label": "Moyen-Orient et Caucase",
+     "hint": "Turquie, Proche-Orient, péninsule Arabique, Caucase",
+     "countries": [
+      [
+       "TR",
+       "Turquie"
+      ],
+      [
+       "IL",
+       "Israël"
+      ],
+      [
+       "PS",
+       "Palestine"
+      ],
+      [
+       "LB",
+       "Liban"
+      ],
+      [
+       "SY",
+       "Syrie"
+      ],
+      [
+       "JO",
+       "Jordanie"
+      ],
+      [
+       "IQ",
+       "Irak"
+      ],
+      [
+       "SA",
+       "Arabie saoudite"
+      ],
+      [
+       "AE",
+       "Émirats arabes unis"
+      ],
+      [
+       "QA",
+       "Qatar"
+      ],
+      [
+       "KW",
+       "Koweït"
+      ],
+      [
+       "BH",
+       "Bahreïn"
+      ],
+      [
+       "OM",
+       "Oman"
+      ],
+      [
+       "YE",
+       "Yémen"
+      ],
+      [
+       "AM",
+       "Arménie"
+      ],
+      [
+       "AZ",
+       "Azerbaïdjan"
+      ],
+      [
+       "GE",
+       "Géorgie"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "key": "amerique",
+   "label": "Amériques",
+   "hint": "Amérique du Nord, centrale, du Sud et Caraïbes",
+   "subregions": [
+    {
+     "key": "amerique-nord",
+     "label": "Amérique du Nord",
+     "hint": "États-Unis et Canada",
+     "countries": [
+      [
+       "US",
+       "États-Unis"
+      ],
+      [
+       "CA",
+       "Canada (y compris Québec)"
+      ]
+     ]
+    },
+    {
+     "key": "amerique-centrale",
+     "label": "Amérique centrale",
+     "hint": "Mexique et isthme centraméricain",
+     "countries": [
+      [
+       "MX",
+       "Mexique"
+      ],
+      [
+       "GT",
+       "Guatemala"
+      ],
+      [
+       "BZ",
+       "Belize"
+      ],
+      [
+       "HN",
+       "Honduras"
+      ],
+      [
+       "SV",
+       "Salvador"
+      ],
+      [
+       "NI",
+       "Nicaragua"
+      ],
+      [
+       "CR",
+       "Costa Rica"
+      ],
+      [
+       "PA",
+       "Panama"
+      ]
+     ]
+    },
+    {
+     "key": "caraibes",
+     "label": "Caraïbes",
+     "hint": "îles des Antilles",
+     "countries": [
+      [
+       "CU",
+       "Cuba"
+      ],
+      [
+       "HT",
+       "Haïti"
+      ],
+      [
+       "DO",
+       "République dominicaine"
+      ],
+      [
+       "JM",
+       "Jamaïque"
+      ],
+      [
+       "PR",
+       "Porto Rico"
+      ],
+      [
+       "BS",
+       "Bahamas"
+      ],
+      [
+       "BB",
+       "Barbade"
+      ],
+      [
+       "TT",
+       "Trinité-et-Tobago"
+      ],
+      [
+       "AG",
+       "Antigua-et-Barbuda"
+      ],
+      [
+       "DM",
+       "Dominique"
+      ],
+      [
+       "GD",
+       "Grenade"
+      ],
+      [
+       "KN",
+       "Saint-Christophe-et-Niévès"
+      ],
+      [
+       "LC",
+       "Sainte-Lucie"
+      ],
+      [
+       "VC",
+       "Saint-Vincent-et-les-Grenadines"
+      ],
+      [
+       "FR",
+       "Guadeloupe ou Martinique (France)"
+      ]
+     ]
+    },
+    {
+     "key": "amerique-sud",
+     "label": "Amérique du Sud",
+     "hint": "pays sud-américains",
+     "countries": [
+      [
+       "AR",
+       "Argentine"
+      ],
+      [
+       "BO",
+       "Bolivie"
+      ],
+      [
+       "BR",
+       "Brésil"
+      ],
+      [
+       "CL",
+       "Chili"
+      ],
+      [
+       "CO",
+       "Colombie"
+      ],
+      [
+       "EC",
+       "Équateur"
+      ],
+      [
+       "GY",
+       "Guyana"
+      ],
+      [
+       "PY",
+       "Paraguay"
+      ],
+      [
+       "PE",
+       "Pérou"
+      ],
+      [
+       "SR",
+       "Suriname"
+      ],
+      [
+       "UY",
+       "Uruguay"
+      ],
+      [
+       "VE",
+       "Venezuela"
+      ],
+      [
+       "FR",
+       "Guyane (France)"
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "key": "oceanie",
+   "label": "Océanie",
+   "hint": "Australie, Nouvelle-Zélande et îles du Pacifique",
+   "subregions": [
+    {
+     "key": "oceanie",
+     "label": "Océanie",
+     "hint": "Australie, Nouvelle-Zélande et îles du Pacifique",
+     "countries": [
+      [
+       "AU",
+       "Australie"
+      ],
+      [
+       "NZ",
+       "Nouvelle-Zélande"
+      ],
+      [
+       "PG",
+       "Papouasie-Nouvelle-Guinée"
+      ],
+      [
+       "FJ",
+       "Fidji"
+      ],
+      [
+       "SB",
+       "Îles Salomon"
+      ],
+      [
+       "VU",
+       "Vanuatu"
+      ],
+      [
+       "WS",
+       "Samoa"
+      ],
+      [
+       "TO",
+       "Tonga"
+      ],
+      [
+       "KI",
+       "Kiribati"
+      ],
+      [
+       "TV",
+       "Tuvalu"
+      ],
+      [
+       "NR",
+       "Nauru"
+      ],
+      [
+       "FM",
+       "Micronésie"
+      ],
+      [
+       "MH",
+       "Îles Marshall"
+      ],
+      [
+       "PW",
+       "Palaos"
+      ],
+      [
+       "FR",
+       "Nouvelle-Calédonie ou Polynésie française (France)"
+      ]
+     ]
+    }
+   ]
+  }
+ ],
+ "names": {
+  "FR": "France",
+  "BE": "Belgique",
+  "NL": "Pays-Bas",
+  "LU": "Luxembourg",
+  "DE": "Allemagne",
+  "AT": "Autriche",
+  "CH": "Suisse",
+  "LI": "Liechtenstein",
+  "MC": "Monaco",
+  "GB": "Royaume-Uni",
+  "IE": "Irlande",
+  "IS": "Islande",
+  "NO": "Norvège",
+  "SE": "Suède",
+  "FI": "Finlande",
+  "DK": "Danemark",
+  "EE": "Estonie",
+  "LV": "Lettonie",
+  "LT": "Lituanie",
+  "ES": "Espagne",
+  "PT": "Portugal",
+  "IT": "Italie",
+  "MT": "Malte",
+  "SM": "Saint-Marin",
+  "VA": "Vatican",
+  "AD": "Andorre",
+  "GR": "Grèce",
+  "CY": "Chypre",
+  "SI": "Slovénie",
+  "HR": "Croatie",
+  "BA": "Bosnie-Herzégovine",
+  "RS": "Serbie",
+  "ME": "Monténégro",
+  "MK": "Macédoine du Nord",
+  "AL": "Albanie",
+  "XK": "Kosovo",
+  "YU": "Yougoslavie",
+  "PL": "Pologne",
+  "CZ": "Tchéquie",
+  "SK": "Slovaquie",
+  "HU": "Hongrie",
+  "RO": "Roumanie",
+  "BG": "Bulgarie",
+  "MD": "Moldavie",
+  "UA": "Ukraine",
+  "BY": "Biélorussie",
+  "RU": "Russie",
+  "SU": "URSS",
+  "CS": "Tchécoslovaquie",
+  "DZ": "Algérie",
+  "EG": "Égypte",
+  "LY": "Libye",
+  "MA": "Maroc",
+  "SD": "Soudan",
+  "TN": "Tunisie",
+  "EH": "Sahara occidental",
+  "BJ": "Bénin",
+  "BF": "Burkina Faso",
+  "CV": "Cap-Vert",
+  "CI": "Côte d'Ivoire",
+  "GM": "Gambie",
+  "GH": "Ghana",
+  "GN": "Guinée",
+  "GW": "Guinée-Bissau",
+  "LR": "Liberia",
+  "ML": "Mali",
+  "MR": "Mauritanie",
+  "NE": "Niger",
+  "NG": "Nigeria",
+  "SN": "Sénégal",
+  "SL": "Sierra Leone",
+  "TG": "Togo",
+  "AO": "Angola",
+  "CM": "Cameroun",
+  "CF": "République centrafricaine",
+  "TD": "Tchad",
+  "CG": "République du Congo",
+  "CD": "République démocratique du Congo",
+  "GQ": "Guinée équatoriale",
+  "GA": "Gabon",
+  "ST": "Sao Tomé-et-Principe",
+  "BI": "Burundi",
+  "KM": "Comores",
+  "DJ": "Djibouti",
+  "ER": "Érythrée",
+  "ET": "Éthiopie",
+  "KE": "Kenya",
+  "MG": "Madagascar",
+  "MW": "Malawi",
+  "MU": "Maurice",
+  "MZ": "Mozambique",
+  "RW": "Rwanda",
+  "SC": "Seychelles",
+  "SO": "Somalie",
+  "SS": "Soudan du Sud",
+  "TZ": "Tanzanie",
+  "UG": "Ouganda",
+  "ZM": "Zambie",
+  "ZW": "Zimbabwe",
+  "ZA": "Afrique du Sud",
+  "BW": "Botswana",
+  "SZ": "Eswatini",
+  "LS": "Lesotho",
+  "NA": "Namibie",
+  "CN": "Chine",
+  "JP": "Japon",
+  "KR": "Corée du Sud",
+  "KP": "Corée du Nord",
+  "MN": "Mongolie",
+  "TW": "Taïwan",
+  "BN": "Brunei",
+  "KH": "Cambodge",
+  "ID": "Indonésie",
+  "LA": "Laos",
+  "MY": "Malaisie",
+  "MM": "Birmanie",
+  "PH": "Philippines",
+  "SG": "Singapour",
+  "TH": "Thaïlande",
+  "TL": "Timor oriental",
+  "VN": "Viêt Nam",
+  "AF": "Afghanistan",
+  "BD": "Bangladesh",
+  "BT": "Bhoutan",
+  "IN": "Inde",
+  "IR": "Iran",
+  "MV": "Maldives",
+  "NP": "Népal",
+  "PK": "Pakistan",
+  "LK": "Sri Lanka",
+  "KZ": "Kazakhstan",
+  "KG": "Kirghizistan",
+  "TJ": "Tadjikistan",
+  "TM": "Turkménistan",
+  "UZ": "Ouzbékistan",
+  "TR": "Turquie",
+  "IL": "Israël",
+  "PS": "Palestine",
+  "LB": "Liban",
+  "SY": "Syrie",
+  "JO": "Jordanie",
+  "IQ": "Irak",
+  "SA": "Arabie saoudite",
+  "AE": "Émirats arabes unis",
+  "QA": "Qatar",
+  "KW": "Koweït",
+  "BH": "Bahreïn",
+  "OM": "Oman",
+  "YE": "Yémen",
+  "AM": "Arménie",
+  "AZ": "Azerbaïdjan",
+  "GE": "Géorgie",
+  "US": "États-Unis",
+  "CA": "Canada",
+  "MX": "Mexique",
+  "GT": "Guatemala",
+  "BZ": "Belize",
+  "HN": "Honduras",
+  "SV": "Salvador",
+  "NI": "Nicaragua",
+  "CR": "Costa Rica",
+  "PA": "Panama",
+  "CU": "Cuba",
+  "HT": "Haïti",
+  "DO": "République dominicaine",
+  "JM": "Jamaïque",
+  "PR": "Porto Rico",
+  "BS": "Bahamas",
+  "BB": "Barbade",
+  "TT": "Trinité-et-Tobago",
+  "AG": "Antigua-et-Barbuda",
+  "DM": "Dominique",
+  "GD": "Grenade",
+  "KN": "Saint-Christophe-et-Niévès",
+  "LC": "Sainte-Lucie",
+  "VC": "Saint-Vincent-et-les-Grenadines",
+  "AR": "Argentine",
+  "BO": "Bolivie",
+  "BR": "Brésil",
+  "CL": "Chili",
+  "CO": "Colombie",
+  "EC": "Équateur",
+  "GY": "Guyana",
+  "PY": "Paraguay",
+  "PE": "Pérou",
+  "SR": "Suriname",
+  "UY": "Uruguay",
+  "VE": "Venezuela",
+  "AU": "Australie",
+  "NZ": "Nouvelle-Zélande",
+  "PG": "Papouasie-Nouvelle-Guinée",
+  "FJ": "Fidji",
+  "SB": "Îles Salomon",
+  "VU": "Vanuatu",
+  "WS": "Samoa",
+  "TO": "Tonga",
+  "KI": "Kiribati",
+  "TV": "Tuvalu",
+  "NR": "Nauru",
+  "FM": "Micronésie",
+  "MH": "Îles Marshall",
+  "PW": "Palaos",
+  "INT": "International"
+ }
+}

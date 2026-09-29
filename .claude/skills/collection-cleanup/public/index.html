@@ -17,6 +17,19 @@
     <option value="etranger">🌍 Étranger seulement</option>
     <option value="inconnu">Origine inconnue</option>
   </select>
+  <select id="country-filter" title="Filtrer par pays">
+    <option value="tous">Tous pays</option>
+  </select>
+  <select id="sort-order" title="Ordre des cartes dans chaque thème">
+    <option value="q_score">Tri : notoriété (q_score)</option>
+    <option value="keep_asc">Tri : à défausser d'abord</option>
+    <option value="keep_desc">Tri : à garder d'abord</option>
+  </select>
+  <span class="threshold" title="Sélectionne les cartes visibles (filtres appliqués) dont le score de conservation est sous ce seuil. Ne défausse rien : la défausse passe toujours par le bouton et sa confirmation.">
+    <label for="threshold">Score &lt;</label>
+    <input id="threshold" type="number" min="0" max="100" step="5" value="30" />
+    <button id="btn-select-below" type="button">Sélectionner</button>
+  </span>
   <div class="header-actions">
     <button id="btn-reload">Recharger</button>
   </div>
